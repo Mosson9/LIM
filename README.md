@@ -24,6 +24,7 @@ product mind-map, the App prototype, and the Admin prototype:
 |------|------------|
 | [`backend/`](backend) | **Go REST API** — auth, the six-dimension analysis engine, decisions, savings, cooling-off wishlist, subscriptions, and all admin analytics. Runs with zero external services. |
 | [`ios/`](ios) | **SwiftUI app** — all 14 screens (onboarding → ask → analyzing → result → growth → history → plus …), pixel-faithful to the prototype's design system. |
+| [`admin/`](admin) | **Admin web app** — a zero-build dashboard (vanilla JS) over the `/admin` API: overview, users, decisions, revenue, live AI-config tuning, categories, skins, push. |
 | [`docs/`](docs) | **Documentation** — architecture, full API reference, data model, and deployment guide. |
 | [`design/`](design) | Extracted CSS design tokens from the original prototypes, kept for traceability. |
 
@@ -91,7 +92,17 @@ open LIM.xcodeproj         # Run on an iPhone simulator
 The app defaults to `http://localhost:8080`; sign in with a demo account or
 register a new one.
 
-### 3. Optional — real AI via Claude
+### 3. Admin dashboard (zero build)
+
+```bash
+cd backend
+LIM_ADMIN_DIR=../admin make run     # then open http://localhost:8080/admin/
+```
+
+Log in with `admin@lim.app` / `admin123`. (Or serve `admin/` from any static
+host and pass `?api=http://localhost:8080`.)
+
+### 4. Optional — real AI via Claude
 
 ```bash
 cd backend
@@ -108,7 +119,7 @@ ANTHROPIC_API_KEY=sk-ant-... make run   # engine uses Claude, falls back to the 
                                                └────────────┬─────────────┘
 ┌─────────────────┐        REST / JWT                       │ JSON snapshot
 │  Admin web app   │ ──────────────────────────────────────▶│  (swappable for
-│  (prototype)     │   GET /api/v1/admin/*                   │   Postgres)
+│  (vanilla JS)    │   /api/v1/admin/*  · served at /admin/  │   Postgres)
 └─────────────────┘                                          ▼
                                           optional ──▶ Anthropic Claude
 ```

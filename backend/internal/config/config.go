@@ -15,6 +15,7 @@ type Config struct {
 	JWTSecret     string        // HMAC secret for signing tokens
 	TokenTTL      time.Duration // access-token lifetime
 	CORSOrigin    string        // allowed origin for the admin web app ("*" for any)
+	AdminDir      string        // if set, serve the admin web app from this dir at /admin/
 	SeedDemo      bool          // seed demo users/decisions on first boot
 	AdminEmail    string        // bootstrap admin account
 	AdminPassword string        // bootstrap admin password
@@ -34,6 +35,7 @@ func Load() Config {
 		JWTSecret:      env("LIM_JWT_SECRET", "dev-secret-change-me"),
 		TokenTTL:       time.Duration(envInt("LIM_TOKEN_TTL_HOURS", 720)) * time.Hour,
 		CORSOrigin:     env("LIM_CORS_ORIGIN", "*"),
+		AdminDir:       env("LIM_ADMIN_DIR", ""),
 		SeedDemo:       envBool("LIM_SEED_DEMO", true),
 		AdminEmail:     env("LIM_ADMIN_EMAIL", "admin@lim.app"),
 		AdminPassword:  env("LIM_ADMIN_PASSWORD", "admin123"),

@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LIM · 管理后台</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=Newsreader:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script>
+    // API base URL. Defaults to same-origin when the admin is served by the Go
+    // backend; otherwise points at the local API. Override with ?api=… or by
+    // editing this value.
+    window.LIM_API_BASE =
+      new URLSearchParams(location.search).get('api') ||
+      (location.port === '8080' || location.protocol === 'file:' ? 'http://localhost:8080' : location.origin);
+  </script>
+</head>
+<body>
+  <div id="root" class="login-wrap"></div>
+  <script src="app.js"></script>
+</body>
+</html>

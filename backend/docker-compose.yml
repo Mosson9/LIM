@@ -15,11 +15,16 @@ services:
       LIM_ADMIN_PASSWORD: "admin123"
       LIM_CORS_ORIGIN: "*"
       LIM_SEED_DEMO: "true"
+      # Serve the static admin web app from the bind-mount below, same origin.
+      # Visit http://localhost:8080/admin/ (admin@lim.app / admin123).
+      LIM_ADMIN_DIR: "/admin"
       # Optional: enable the Claude-backed analysis engine.
       # ANTHROPIC_API_KEY: "sk-ant-..."
       # LIM_ANTHROPIC_MODEL: "claude-sonnet-4-6"
     volumes:
       - lim-data:/data
+      # Admin web app (read-only). Path is relative to this compose file.
+      - ../admin:/admin:ro
     healthcheck:
       test: ["CMD", "/app/lim-server", "-healthcheck"]
       interval: 30s

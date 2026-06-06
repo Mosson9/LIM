@@ -53,7 +53,7 @@ func main() {
 
 	authMgr := auth.New(cfg.JWTSecret, cfg.TokenTTL)
 	engine := ai.New(cfg.AnthropicKey, cfg.AnthropicModel)
-	app := httpapi.NewApp(st, authMgr, engine, cfg.CORSOrigin)
+	app := httpapi.NewApp(st, authMgr, engine, cfg.CORSOrigin, cfg.AdminDir)
 
 	srv := &http.Server{
 		Addr:              cfg.Addr,

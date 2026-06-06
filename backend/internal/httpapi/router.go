@@ -16,11 +16,13 @@ type App struct {
 	auth       *auth.Manager
 	engine     *ai.Engine
 	corsOrigin string
+	adminDir   string
 }
 
-// NewApp constructs the API application.
-func NewApp(s *store.Store, a *auth.Manager, e *ai.Engine, corsOrigin string) *App {
-	return &App{store: s, auth: a, engine: e, corsOrigin: corsOrigin}
+// NewApp constructs the API application. adminDir, when non-empty, serves the
+// static admin web app from that directory at /admin/.
+func NewApp(s *store.Store, a *auth.Manager, e *ai.Engine, corsOrigin, adminDir string) *App {
+	return &App{store: s, auth: a, engine: e, corsOrigin: corsOrigin, adminDir: adminDir}
 }
 
 // Handler builds the fully-wired http.Handler (routes + middleware).
@@ -81,6 +83,15 @@ func (a *App) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/skins", a.requireAdmin(a.handleAdminSkins))
 	mux.HandleFunc("GET /api/v1/admin/push", a.requireAdmin(a.handleAdminListPush))
 	mux.HandleFunc("POST /api/v1/admin/push", a.requireAdmin(a.handleAdminCreatePush))
+
+	// --- Optional: serve the static admin web app at /admin/ (same origin) ---
+	if a.adminDir != "" {
+		fs := http.StripPrefix("/admin/", http.FileServer(http.Dir(a.adminDir)))
+		mux.Handle("GET /admin/", fs)
+		mux.HandleFunc("GET /admin", func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "/admin/", http.StatusMovedPermanently)
+		})
+	}
 
 	return logging(a.withCORS(mux))
 }
