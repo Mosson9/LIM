@@ -24,6 +24,19 @@ type App struct {
 	productMonthly string
 	productYearly  string
 	allowMock      bool
+
+	// Security.
+	globalLimiter *rateLimiter
+	authLimiter   *rateLimiter
+	maxBody       int64
+}
+
+// ConfigureSecurity sets the per-IP rate limits and max request body size.
+// globalRPM/authRPM are requests-per-minute per client IP; maxBody is in bytes.
+func (a *App) ConfigureSecurity(globalRPM, authRPM int, maxBody int64) {
+	a.globalLimiter = newRateLimiter(globalRPM, maxInt(globalRPM/4, 20))
+	a.authLimiter = newRateLimiter(authRPM, maxInt(authRPM/2, 5))
+	a.maxBody = maxBody
 }
 
 // ConfigureBilling wires App Store receipt verification and the product→plan
@@ -36,9 +49,12 @@ func (a *App) ConfigureBilling(v *appstore.Verifier, monthly, yearly string, all
 }
 
 // NewApp constructs the API application. adminDir, when non-empty, serves the
-// static admin web app from that directory at /admin/.
+// static admin web app from that directory at /admin/. Security defaults (rate
+// limits, body cap) are applied here and can be overridden via ConfigureSecurity.
 func NewApp(s store.Store, a *auth.Manager, e *ai.Engine, corsOrigin, adminDir string) *App {
-	return &App{store: s, auth: a, engine: e, corsOrigin: corsOrigin, adminDir: adminDir}
+	app := &App{store: s, auth: a, engine: e, corsOrigin: corsOrigin, adminDir: adminDir}
+	app.ConfigureSecurity(240, 20, 1<<20) // 240 rpm global, 20 rpm auth, 1 MiB body
+	return app
 }
 
 // Handler builds the fully-wired http.Handler (routes + middleware).
@@ -50,9 +66,9 @@ func (a *App) Handler() http.Handler {
 		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "llm": a.engine.UsesLLM()})
 	})
 
-	// --- Auth (public) ---
-	mux.HandleFunc("POST /api/v1/auth/register", a.handleRegister)
-	mux.HandleFunc("POST /api/v1/auth/login", a.handleLogin)
+	// --- Auth (public, stricter per-IP rate limit to slow brute force) ---
+	mux.HandleFunc("POST /api/v1/auth/register", a.limit(a.authLimiter, a.handleRegister))
+	mux.HandleFunc("POST /api/v1/auth/login", a.limit(a.authLimiter, a.handleLogin))
 
 	// --- Catalogue / meta (public) ---
 	mux.HandleFunc("GET /api/v1/meta/categories", a.handleCategories)
@@ -110,5 +126,26 @@ func (a *App) Handler() http.Handler {
 		})
 	}
 
-	return logging(a.withCORS(mux))
+	// Middleware chain (outermost first): recover → security headers → CORS
+	// (handles OPTIONS early) → logging → body cap → per-IP rate limit → routes.
+	var h http.Handler = mux
+	h = a.rateLimitAll(h)
+	h = limitBody(a.maxBody, h)
+	h = logging(h)
+	h = a.withCORS(h)
+	h = securityHeaders(h)
+	h = recoverMiddleware(h)
+	return h
+}
+
+// rateLimitAll enforces the global per-IP limiter across every route.
+func (a *App) rateLimitAll(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if a.globalLimiter != nil && !a.globalLimiter.allow(clientIP(r)) {
+			w.Header().Set("Retry-After", "10")
+			writeError(w, http.StatusTooManyRequests, "请求过于频繁，请稍后再试")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }

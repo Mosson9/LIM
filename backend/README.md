@@ -74,6 +74,11 @@ has a default so it runs with zero config.
 | `LIM_JWT_SECRET` | `dev-secret-change-me` | **change in production** |
 | `LIM_TOKEN_TTL_HOURS` | `720` | access-token lifetime |
 | `LIM_CORS_ORIGIN` | `*` | allowed origin for the admin web app |
+| `LIM_RATE_RPM` | `240` | global per-IP requests/minute |
+| `LIM_AUTH_RATE_RPM` | `20` | per-IP requests/minute on auth endpoints |
+| `LIM_MAX_BODY_BYTES` | `1048576` | max request body size (bytes) |
+| `LIM_ALLOW_MOCK_SUBSCRIBE` | `true` | keep the dev mock `/subscribe` (set `false` in prod) |
+| `LIM_APPLE_ROOT_CERT` | — | path to Apple root PEM for StoreKit verification |
 | `LIM_SEED_DEMO` | `true` | seed demo data on first boot |
 | `LIM_ADMIN_EMAIL` / `LIM_ADMIN_PASSWORD` | `admin@lim.app` / `admin123` | bootstrap admin |
 | `ANTHROPIC_API_KEY` | — | enable the Claude-backed engine |
@@ -103,6 +108,20 @@ LIM_DATABASE_URL="postgres://lim:lim@localhost:5432/lim?sslmode=disable" make ru
 
 No handler, seeder, or test changes are needed to switch — they depend only on
 the interface.
+
+## Security
+
+Every request passes through a middleware chain (`internal/httpapi/security.go`):
+panic recovery (a handler panic becomes a 500, never a crash), security headers
+(`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`), a request body
+cap (`LIM_MAX_BODY_BYTES`), and a per-IP token-bucket rate limiter — a global
+limit (`LIM_RATE_RPM`) plus a stricter one on `/auth/*` to slow brute force
+(429 with `Retry-After` on exceed). Auth is JWT (HS256) + bcrypt; admin routes
+require the `admin` role; StoreKit receipts are verified cryptographically.
+
+For production: change `LIM_JWT_SECRET` and `LIM_ADMIN_PASSWORD`, set a specific
+`LIM_CORS_ORIGIN`, set `LIM_ALLOW_MOCK_SUBSCRIBE=false`, provide
+`LIM_APPLE_ROOT_CERT`, and terminate TLS at a reverse proxy.
 
 ## Layout
 

@@ -17,6 +17,9 @@ type Config struct {
 	TokenTTL      time.Duration // access-token lifetime
 	CORSOrigin    string        // allowed origin for the admin web app ("*" for any)
 	AdminDir      string        // if set, serve the admin web app from this dir at /admin/
+	RateRPM       int           // global per-IP requests/minute
+	AuthRateRPM   int           // per-IP requests/minute on auth endpoints
+	MaxBodyBytes  int64         // max request body size
 	SeedDemo      bool          // seed demo users/decisions on first boot
 	AdminEmail    string        // bootstrap admin account
 	AdminPassword string        // bootstrap admin password
@@ -48,6 +51,9 @@ func Load() Config {
 		TokenTTL:       time.Duration(envInt("LIM_TOKEN_TTL_HOURS", 720)) * time.Hour,
 		CORSOrigin:     env("LIM_CORS_ORIGIN", "*"),
 		AdminDir:       env("LIM_ADMIN_DIR", ""),
+		RateRPM:        envInt("LIM_RATE_RPM", 240),
+		AuthRateRPM:    envInt("LIM_AUTH_RATE_RPM", 20),
+		MaxBodyBytes:   int64(envInt("LIM_MAX_BODY_BYTES", 1<<20)),
 		SeedDemo:       envBool("LIM_SEED_DEMO", true),
 		AdminEmail:     env("LIM_ADMIN_EMAIL", "admin@lim.app"),
 		AdminPassword:  env("LIM_ADMIN_PASSWORD", "admin123"),

@@ -69,6 +69,41 @@ func do(t *testing.T, srv *httptest.Server, method, path, token string, body any
 	return resp.StatusCode, out
 }
 
+// TestAuthRateLimit confirms the per-IP auth limiter returns 429 once the burst
+// is exhausted (defaults: 20 rpm, burst 10).
+func TestAuthRateLimit(t *testing.T) {
+	srv := newServer(t)
+	got429 := false
+	for i := 0; i < 20; i++ {
+		code, _ := do(t, srv, "POST", "/api/v1/auth/login", "", map[string]any{
+			"email": "nobody@test.com", "password": "wrongpass",
+		})
+		if code == http.StatusTooManyRequests {
+			got429 = true
+			break
+		}
+	}
+	if !got429 {
+		t.Error("expected a 429 after exhausting the auth rate-limit burst")
+	}
+}
+
+// TestSecurityHeaders confirms hardening headers are present.
+func TestSecurityHeaders(t *testing.T) {
+	srv := newServer(t)
+	resp, err := http.Get(srv.URL + "/healthz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.Header.Get("X-Content-Type-Options") != "nosniff" {
+		t.Error("missing X-Content-Type-Options: nosniff")
+	}
+	if resp.Header.Get("X-Frame-Options") != "DENY" {
+		t.Error("missing X-Frame-Options: DENY")
+	}
+}
+
 // TestFullUserFlow walks the core journey: register → analyze → resist → stats.
 func TestFullUserFlow(t *testing.T) {
 	srv := newServer(t)

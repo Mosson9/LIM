@@ -70,6 +70,7 @@ func main() {
 		log.Fatalf("appstore verifier: %v", err)
 	}
 	app.ConfigureBilling(verifier, cfg.ProductMonthly, cfg.ProductYearly, cfg.AllowMockSubscribe)
+	app.ConfigureSecurity(cfg.RateRPM, cfg.AuthRateRPM, cfg.MaxBodyBytes)
 
 	srv := &http.Server{
 		Addr:              cfg.Addr,
