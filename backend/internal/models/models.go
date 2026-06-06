@@ -70,6 +70,10 @@ type User struct {
 	AIUsedDate   string     `json:"-"` // YYYY-MM-DD bucket for the daily counter
 	AppIcon      string     `json:"app_icon"`
 	Onboarded    bool       `json:"onboarded"`
+	// AppleOriginalTransactionID links the account to its StoreKit subscription
+	// so App Store Server Notifications (renewals/refunds) can find the user. It
+	// is an opaque Apple identifier (not a secret); persisted as a normal field.
+	AppleOriginalTransactionID string `json:"apple_original_transaction_id,omitempty"`
 }
 
 // IsPlus reports whether the user currently has an active paid entitlement.

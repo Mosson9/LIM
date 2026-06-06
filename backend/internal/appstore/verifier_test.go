@@ -151,6 +151,59 @@ func TestVerifyBundleMismatchRejected(t *testing.T) {
 	}
 }
 
+func TestVerifyNotification(t *testing.T) {
+	root := mkCert(t, "Root", nil, true)
+	inter := mkCert(t, "Inter", root, true)
+	leaf := mkCert(t, "Leaf", inter, false)
+	chain := []*certNode{leaf, inter, root}
+
+	// Nested signed transaction.
+	txnJWS := signJWS(t, validPayload(), leaf, chain)
+
+	// Outer notification payload embeds the transaction JWS.
+	notif := jwt.MapClaims{
+		"notificationType": "DID_RENEW",
+		"subtype":          "BILLING_RECOVERY",
+		"notificationUUID": "uuid-123",
+		"version":          "2.0",
+		"signedDate":       float64(time.Now().UnixMilli()),
+		"data": map[string]any{
+			"bundleId":              "app.lim.ios",
+			"environment":           "Sandbox",
+			"signedTransactionInfo": txnJWS,
+		},
+	}
+	jws := signJWS(t, notif, leaf, chain)
+
+	v, _ := New([][]byte{rootPEM(t, root)}, "app.lim.ios", "Sandbox")
+	n, err := v.VerifyNotification(jws)
+	if err != nil {
+		t.Fatalf("verify notification: %v", err)
+	}
+	if n.Type != "DID_RENEW" {
+		t.Errorf("type = %q, want DID_RENEW", n.Type)
+	}
+	if n.Transaction == nil || n.Transaction.ProductID != "app.lim.ios.plus.yearly" {
+		t.Errorf("nested transaction not decoded: %+v", n.Transaction)
+	}
+	if n.Transaction.OriginalTransactionID == "" {
+		t.Error("missing original transaction id")
+	}
+}
+
+func TestVerifyNotificationUntrustedRejected(t *testing.T) {
+	root := mkCert(t, "Root", nil, true)
+	inter := mkCert(t, "Inter", root, true)
+	leaf := mkCert(t, "Leaf", inter, false)
+	jws := signJWS(t, jwt.MapClaims{"notificationType": "EXPIRED"}, leaf, []*certNode{leaf, inter, root})
+
+	other := mkCert(t, "Other", nil, true)
+	v, _ := New([][]byte{rootPEM(t, other)}, "", "")
+	if _, err := v.VerifyNotification(jws); err == nil {
+		t.Fatal("expected untrusted notification to be rejected")
+	}
+}
+
 func TestVerifyNoRootConfigured(t *testing.T) {
 	v, _ := New(nil, "", "")
 	if v.HasRoots() {

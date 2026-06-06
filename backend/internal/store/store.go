@@ -182,6 +182,23 @@ func (s *FileStore) GetUserByEmail(email string) (*models.User, error) {
 	return &cp, nil
 }
 
+// GetUserByOriginalTransactionID finds the user linked to a StoreKit original
+// transaction id (used by App Store Server Notifications).
+func (s *FileStore) GetUserByOriginalTransactionID(otx string) (*models.User, error) {
+	if otx == "" {
+		return nil, ErrNotFound
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, u := range s.st.Users {
+		if u.AppleOriginalTransactionID == otx {
+			cp := *u
+			return &cp, nil
+		}
+	}
+	return nil, ErrNotFound
+}
+
 // UpdateUser replaces the stored user (matched by ID).
 func (s *FileStore) UpdateUser(u *models.User) error {
 	s.mu.Lock()

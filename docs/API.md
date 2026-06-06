@@ -95,6 +95,7 @@ When `LIM_SEED_DEMO=true` (the default), the store is seeded on first boot:
 | Subscription | `GET /api/v1/subscription` | user |
 | Subscription | `POST /api/v1/subscription/verify` | user |
 | Subscription | `POST /api/v1/subscription/subscribe` | user (dev mock) |
+| Subscription | `POST /api/v1/appstore/notifications` | public (JWS-signed) |
 | Admin | `GET /api/v1/admin/overview` | admin |
 | Admin | `GET /api/v1/admin/users` | admin |
 | Admin | `GET /api/v1/admin/users/{id}` | admin |
@@ -638,6 +639,22 @@ curl -s -X POST http://localhost:8080/api/v1/subscription/verify \
   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -d '{"jws":"<StoreKit2 jwsRepresentation>"}'
 ```
+
+### `POST /api/v1/appstore/notifications` · public (JWS-signed)
+
+App Store Server Notifications **V2** webhook. Register this URL in App Store
+Connect. No bearer token — authenticity comes from the JWS signature. The server
+verifies the `signedPayload` (and its nested `signedTransactionInfo`), finds the
+account via `originalTransactionId`, and updates the entitlement:
+
+- `SUBSCRIBED` / `DID_RENEW` / `DID_RECOVER` / `RESUBSCRIBE` / `OFFER_REDEEMED` →
+  extend Plus to the new expiry (renewals also record a transaction).
+- `EXPIRED` / `REVOKE` / `GRACE_PERIOD_EXPIRED` → downgrade to free.
+- `REFUND` → downgrade to free and record a refund transaction.
+
+Request: `{ "signedPayload": "<App Store notification JWS>" }`. Returns `200` once
+the payload is verified (unknown subscriptions are acknowledged and ignored);
+`400` on a malformed/unverifiable payload (Apple will retry).
 
 ### `POST /api/v1/subscription/subscribe` · user
 

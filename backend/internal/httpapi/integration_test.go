@@ -239,6 +239,19 @@ func TestSubscriptionVerifyWiring(t *testing.T) {
 	}
 }
 
+// TestAppStoreNotificationWiring checks the webhook is mounted (public) and
+// rejects missing/invalid payloads. Full JWS + entitlement-mapping correctness
+// is covered by the appstore package's notification tests.
+func TestAppStoreNotificationWiring(t *testing.T) {
+	srv := newServer(t)
+	if code, _ := do(t, srv, "POST", "/api/v1/appstore/notifications", "", map[string]any{}); code != http.StatusBadRequest {
+		t.Errorf("notification (no payload): got %d, want 400", code)
+	}
+	if code, _ := do(t, srv, "POST", "/api/v1/appstore/notifications", "", map[string]any{"signedPayload": "bad.jws"}); code != http.StatusBadRequest {
+		t.Errorf("notification (bad payload): got %d, want 400", code)
+	}
+}
+
 // TestWishlistCoolingOff parks a decision and resolves it from the wishlist.
 func TestWishlistCoolingOff(t *testing.T) {
 	srv := newServer(t)

@@ -169,6 +169,14 @@ func (s *PostgresStore) GetUserByEmail(email string) (*models.User, error) {
 	return scanUser(s.db.QueryRow(`SELECT doc, password_hash FROM users WHERE lower(email)=lower($1)`, email))
 }
 
+func (s *PostgresStore) GetUserByOriginalTransactionID(otx string) (*models.User, error) {
+	if otx == "" {
+		return nil, ErrNotFound
+	}
+	return scanUser(s.db.QueryRow(
+		`SELECT doc, password_hash FROM users WHERE doc->>'apple_original_transaction_id' = $1`, otx))
+}
+
 func (s *PostgresStore) UpdateUser(u *models.User) error {
 	res, err := s.db.Exec(
 		`UPDATE users SET email=$2, password_hash=$3, last_active=$4, doc=$5 WHERE id=$1`,

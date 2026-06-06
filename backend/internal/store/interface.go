@@ -21,6 +21,7 @@ type Store interface {
 	CreateUser(u *models.User) error
 	GetUser(id string) (*models.User, error)
 	GetUserByEmail(email string) (*models.User, error)
+	GetUserByOriginalTransactionID(otx string) (*models.User, error)
 	UpdateUser(u *models.User) error
 	ListUsers() []*models.User
 	TouchUser(id string)

@@ -59,12 +59,21 @@ func (v *Verifier) HasRoots() bool {
 	return v.roots != nil && len(v.roots.Subjects()) > 0 //nolint:staticcheck // Subjects ok for count
 }
 
-// Verify validates a JWS signed transaction and returns its decoded payload.
-func (v *Verifier) Verify(jws string) (*Transaction, error) {
+// Notification is the subset of App Store Server Notification V2 we act on.
+type Notification struct {
+	Type        string // e.g. DID_RENEW, EXPIRED, REFUND, SUBSCRIBED
+	Subtype     string
+	UUID        string
+	BundleID    string
+	Environment string
+	Transaction *Transaction // decoded from data.signedTransactionInfo (nil if absent)
+}
+
+// verifyClaims validates a JWS (chain + ES256 signature) and returns its claims.
+func (v *Verifier) verifyClaims(jws string) (jwt.MapClaims, error) {
 	if !v.HasRoots() {
 		return nil, errors.New("appstore: no trusted root configured (set LIM_APPLE_ROOT_CERT)")
 	}
-
 	var claims jwt.MapClaims
 	parser := jwt.NewParser(jwt.WithValidMethods([]string{"ES256"}))
 	_, err := parser.ParseWithClaims(jws, &claims, func(t *jwt.Token) (any, error) {
@@ -81,8 +90,52 @@ func (v *Verifier) Verify(jws string) (*Transaction, error) {
 	if err != nil {
 		return nil, fmt.Errorf("appstore: verify: %w", err)
 	}
+	return claims, nil
+}
 
-	txn := &Transaction{
+// Verify validates a JWS signed transaction and returns its decoded payload.
+func (v *Verifier) Verify(jws string) (*Transaction, error) {
+	claims, err := v.verifyClaims(jws)
+	if err != nil {
+		return nil, err
+	}
+	txn := toTransaction(claims)
+	if v.bundleID != "" && txn.BundleID != "" && txn.BundleID != v.bundleID {
+		return nil, fmt.Errorf("appstore: bundle id mismatch: %q", txn.BundleID)
+	}
+	if v.env != "" && txn.Environment != "" && txn.Environment != v.env {
+		return nil, fmt.Errorf("appstore: environment mismatch: %q", txn.Environment)
+	}
+	return txn, nil
+}
+
+// VerifyNotification validates an App Store Server Notification V2 signedPayload
+// and decodes it, including the nested signed transaction (also verified).
+func (v *Verifier) VerifyNotification(signedPayload string) (*Notification, error) {
+	claims, err := v.verifyClaims(signedPayload)
+	if err != nil {
+		return nil, err
+	}
+	n := &Notification{
+		Type:    str(claims, "notificationType"),
+		Subtype: str(claims, "subtype"),
+		UUID:    str(claims, "notificationUUID"),
+	}
+	if data, ok := claims["data"].(map[string]any); ok {
+		dc := jwt.MapClaims(data)
+		n.BundleID = str(dc, "bundleId")
+		n.Environment = str(dc, "environment")
+		if sti := str(dc, "signedTransactionInfo"); sti != "" {
+			if txn, err := v.Verify(sti); err == nil {
+				n.Transaction = txn
+			}
+		}
+	}
+	return n, nil
+}
+
+func toTransaction(claims jwt.MapClaims) *Transaction {
+	return &Transaction{
 		TransactionID:         str(claims, "transactionId"),
 		OriginalTransactionID: str(claims, "originalTransactionId"),
 		ProductID:             str(claims, "productId"),
@@ -92,14 +145,6 @@ func (v *Verifier) Verify(jws string) (*Transaction, error) {
 		PurchaseDate:          ms(claims, "purchaseDate"),
 		ExpiresDate:           ms(claims, "expiresDate"),
 	}
-
-	if v.bundleID != "" && txn.BundleID != "" && txn.BundleID != v.bundleID {
-		return nil, fmt.Errorf("appstore: bundle id mismatch: %q", txn.BundleID)
-	}
-	if v.env != "" && txn.Environment != "" && txn.Environment != v.env {
-		return nil, fmt.Errorf("appstore: environment mismatch: %q", txn.Environment)
-	}
-	return txn, nil
 }
 
 // verifyChain validates the x5c certificate chain in the JWS header up to a

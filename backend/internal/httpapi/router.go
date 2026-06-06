@@ -102,6 +102,8 @@ func (a *App) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/subscription", a.authenticate(a.handleSubscription))
 	mux.HandleFunc("POST /api/v1/subscription/subscribe", a.authenticate(a.handleSubscribe))
 	mux.HandleFunc("POST /api/v1/subscription/verify", a.authenticate(a.handleVerifySubscription))
+	// App Store Server Notifications V2 webhook (public; authenticity = JWS signature).
+	mux.HandleFunc("POST /api/v1/appstore/notifications", a.handleAppStoreNotification)
 
 	// --- Admin ---
 	mux.HandleFunc("GET /api/v1/admin/overview", a.requireAdmin(a.handleAdminOverview))

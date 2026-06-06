@@ -87,6 +87,30 @@ func (a *App) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// planForProduct maps a StoreKit product id to a plan, monthly-equivalent
+// amount, and display name. ok is false for unknown products.
+func (a *App) planForProduct(productID string) (plan models.Plan, amount int, name string, ok bool) {
+	switch productID {
+	case a.productMonthly:
+		return models.PlanMonth, 18, "月度会员", true
+	case a.productYearly:
+		return models.PlanYear, 98, "年度会员", true
+	default:
+		return models.PlanFree, 0, "", false
+	}
+}
+
+// entitlementUntil returns Apple's expiry, or a sane fallback window if absent.
+func entitlementUntil(expires time.Time, plan models.Plan) time.Time {
+	if !expires.IsZero() {
+		return expires
+	}
+	if plan == models.PlanYear {
+		return time.Now().Add(365 * 24 * time.Hour)
+	}
+	return time.Now().Add(30 * 24 * time.Hour)
+}
+
 type verifyReq struct {
 	// JWS is StoreKit 2's `Transaction.jwsRepresentation` from the client.
 	JWS string `json:"jws"`
@@ -113,30 +137,13 @@ func (a *App) handleVerifySubscription(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var (
-		plan     models.Plan
-		amount   int
-		planName string
-	)
-	switch txn.ProductID {
-	case a.productMonthly:
-		plan, amount, planName = models.PlanMonth, 18, "月度会员"
-	case a.productYearly:
-		plan, amount, planName = models.PlanYear, 98, "年度会员"
-	default:
+	plan, amount, planName, ok := a.planForProduct(txn.ProductID)
+	if !ok {
 		writeError(w, http.StatusBadRequest, "未知的商品："+txn.ProductID)
 		return
 	}
 
-	// Entitlement runs until Apple's expiry (fall back to a sane window if absent).
-	until := txn.ExpiresDate
-	if until.IsZero() {
-		if plan == models.PlanYear {
-			until = time.Now().Add(365 * 24 * time.Hour)
-		} else {
-			until = time.Now().Add(30 * 24 * time.Hour)
-		}
-	}
+	until := entitlementUntil(txn.ExpiresDate, plan)
 	if until.Before(time.Now()) {
 		writeError(w, http.StatusBadRequest, "订阅已过期")
 		return
@@ -144,6 +151,10 @@ func (a *App) handleVerifySubscription(w http.ResponseWriter, r *http.Request) {
 
 	u.Plan = plan
 	u.PlusUntil = &until
+	// Link the account to its subscription for renewal/refund notifications.
+	if txn.OriginalTransactionID != "" {
+		u.AppleOriginalTransactionID = txn.OriginalTransactionID
+	}
 	if err := a.store.UpdateUser(u); err != nil {
 		writeError(w, http.StatusInternalServerError, "开通失败")
 		return
@@ -157,4 +168,79 @@ func (a *App) handleVerifySubscription(w http.ResponseWriter, r *http.Request) {
 		Plan: u.Plan, IsPlus: u.IsPlus(), PlusUntil: u.PlusUntil,
 		Plans: a.store.Plans(), Perks: a.store.Perks(),
 	})
+}
+
+type notificationReq struct {
+	// SignedPayload is the App Store Server Notification V2 JWS.
+	SignedPayload string `json:"signedPayload"`
+}
+
+// handleAppStoreNotification receives App Store Server Notifications V2 (renewals,
+// expirations, refunds, …). It is public — authenticity comes from the JWS
+// signature, not a bearer token. The account is located via the subscription's
+// originalTransactionId (stored at purchase time). Always returns 200 once the
+// payload is verified so Apple doesn't retry for cases we intentionally ignore.
+func (a *App) handleAppStoreNotification(w http.ResponseWriter, r *http.Request) {
+	if a.appstore == nil {
+		writeError(w, http.StatusNotImplemented, "未配置 App Store 校验")
+		return
+	}
+	var req notificationReq
+	if err := decodeJSON(r, &req); err != nil || req.SignedPayload == "" {
+		writeError(w, http.StatusBadRequest, "缺少 signedPayload")
+		return
+	}
+	n, err := a.appstore.VerifyNotification(req.SignedPayload)
+	if err != nil {
+		// 400 → Apple retries (could be transient / misconfiguration).
+		writeError(w, http.StatusBadRequest, "通知校验失败："+err.Error())
+		return
+	}
+	if n.Transaction == nil || n.Transaction.OriginalTransactionID == "" {
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "ignored": "no transaction"})
+		return
+	}
+	u, err := a.store.GetUserByOriginalTransactionID(n.Transaction.OriginalTransactionID)
+	if err != nil {
+		// Unknown subscription (e.g. account not linked yet) — acknowledge.
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "ignored": "unknown subscription"})
+		return
+	}
+
+	now := time.Now()
+	switch n.Type {
+	case "SUBSCRIBED", "DID_RENEW", "DID_RECOVER", "OFFER_REDEEMED", "RESUBSCRIBE":
+		if plan, amount, planName, ok := a.planForProduct(n.Transaction.ProductID); ok {
+			until := entitlementUntil(n.Transaction.ExpiresDate, plan)
+			u.Plan = plan
+			u.PlusUntil = &until
+			_ = a.store.UpdateUser(u)
+			if n.Type == "DID_RENEW" {
+				_ = a.store.AddTransaction(&models.Transaction{
+					UserID: u.ID, UserName: u.Name, Plan: planName + "（续订）",
+					Amount: amount, Status: "success", CreatedAt: now,
+				})
+			}
+		}
+	case "EXPIRED", "REVOKE", "GRACE_PERIOD_EXPIRED":
+		past := now.Add(-time.Minute)
+		u.Plan = models.PlanFree
+		u.PlusUntil = &past
+		_ = a.store.UpdateUser(u)
+	case "REFUND":
+		past := now.Add(-time.Minute)
+		u.Plan = models.PlanFree
+		u.PlusUntil = &past
+		_ = a.store.UpdateUser(u)
+		if _, amount, planName, ok := a.planForProduct(n.Transaction.ProductID); ok {
+			_ = a.store.AddTransaction(&models.Transaction{
+				UserID: u.ID, UserName: u.Name, Plan: planName + "（退款）",
+				Amount: amount, Status: "refund", CreatedAt: now,
+			})
+		}
+	default:
+		// DID_CHANGE_RENEWAL_STATUS, PRICE_INCREASE, etc. — no entitlement change.
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "type": n.Type})
 }
