@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/mosson9/lim/backend/internal/ai"
+	"github.com/mosson9/lim/backend/internal/appstore"
 	"github.com/mosson9/lim/backend/internal/auth"
 	"github.com/mosson9/lim/backend/internal/config"
 	"github.com/mosson9/lim/backend/internal/httpapi"
@@ -54,6 +55,21 @@ func main() {
 	authMgr := auth.New(cfg.JWTSecret, cfg.TokenTTL)
 	engine := ai.New(cfg.AnthropicKey, cfg.AnthropicModel)
 	app := httpapi.NewApp(st, authMgr, engine, cfg.CORSOrigin, cfg.AdminDir)
+
+	// App Store (StoreKit 2) receipt verification.
+	var roots [][]byte
+	if cfg.AppleRootCert != "" {
+		pem, err := os.ReadFile(cfg.AppleRootCert)
+		if err != nil {
+			log.Fatalf("read apple root cert: %v", err)
+		}
+		roots = append(roots, pem)
+	}
+	verifier, err := appstore.New(roots, cfg.AppleBundleID, cfg.AppleEnv)
+	if err != nil {
+		log.Fatalf("appstore verifier: %v", err)
+	}
+	app.ConfigureBilling(verifier, cfg.ProductMonthly, cfg.ProductYearly, cfg.AllowMockSubscribe)
 
 	srv := &http.Server{
 		Addr:              cfg.Addr,

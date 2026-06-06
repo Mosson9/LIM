@@ -64,6 +64,29 @@ ios/
     └── Screens/                # 14 screens (onboarding → result → growth …)
 ```
 
+## Subscriptions (StoreKit 2)
+
+LIM Plus uses **StoreKit 2** with **server-side receipt verification**:
+
+1. `StoreKitService` loads the auto-renewable products
+   (`app.lim.ios.plus.monthly`, `app.lim.ios.plus.yearly`).
+2. On purchase, it takes Apple's signed transaction (`jwsRepresentation`) and
+   POSTs it to `POST /api/v1/subscription/verify`.
+3. The backend validates the JWS certificate chain against Apple's root and
+   grants the entitlement until the transaction's expiry — purchases can't be
+   spoofed by the client. `Transaction.updates` re-verifies renewals/restores.
+
+**Local testing without App Store Connect:** the repo ships
+[`Products.storekit`](Products.storekit). In Xcode, edit the **Run** scheme →
+**Options** → **StoreKit Configuration** → select `Products.storekit`. Purchases
+then work in the simulator. If no configuration is selected (products fail to
+load), `PlusView` falls back to the backend's dev-only mock `/subscribe` so the
+flow is still demoable.
+
+**Production:** create the two product IDs in App Store Connect, give the backend
+Apple's root via `LIM_APPLE_ROOT_CERT`, and set `LIM_ALLOW_MOCK_SUBSCRIBE=false`
+(see [`../backend/.env.example`](../backend/.env.example)).
+
 ## Architecture notes
 
 - **`AppModel`** (`@MainActor`, `ObservableObject`) is the single source of

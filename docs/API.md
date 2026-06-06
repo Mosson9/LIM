@@ -93,7 +93,8 @@ When `LIM_SEED_DEMO=true` (the default), the store is seeded on first boot:
 | Wishlist | `DELETE /api/v1/wishlist/{id}` | user |
 | Stats | `GET /api/v1/stats` | user |
 | Subscription | `GET /api/v1/subscription` | user |
-| Subscription | `POST /api/v1/subscription/subscribe` | user |
+| Subscription | `POST /api/v1/subscription/verify` | user |
+| Subscription | `POST /api/v1/subscription/subscribe` | user (dev mock) |
 | Admin | `GET /api/v1/admin/overview` | admin |
 | Admin | `GET /api/v1/admin/users` | admin |
 | Admin | `GET /api/v1/admin/users/{id}` | admin |
@@ -614,15 +615,37 @@ curl -s http://localhost:8080/api/v1/subscription -H "Authorization: Bearer $TOK
 
 `plus_until` (RFC3339) is included when the user has an entitlement.
 
+### `POST /api/v1/subscription/verify` · user
+
+**Production purchase path.** Validates an Apple StoreKit 2 signed transaction and
+grants the entitlement until the transaction's expiry. The server verifies the
+JWS certificate chain against Apple's root (configured via `LIM_APPLE_ROOT_CERT`),
+checks the bundle id / environment, maps the `productId` to a plan, sets
+`plan` + `plus_until`, and records a `Transaction`. Returns the same shape as
+`GET /subscription`.
+
+Request (`verifyReq`): `jws` is StoreKit 2's `Transaction.jwsRepresentation`.
+
+```json
+{ "jws": "eyJhbGciOiJFUzI1NiIsIng1YyI6Wy4uLl19.eyJ0cmFuc2FjdGlvbklkIjoi..." }
+```
+
+Errors: `400 {"error":"缺少 jws 凭证"}`, `400 {"error":"凭证校验失败：…"}`,
+`400 {"error":"未知的商品：…"}`, `501 {"error":"未配置 App Store 校验"}`.
+
+```bash
+curl -s -X POST http://localhost:8080/api/v1/subscription/verify \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"jws":"<StoreKit2 jwsRepresentation>"}'
+```
+
 ### `POST /api/v1/subscription/subscribe` · user
 
-**Mock** purchase: grants the entitlement, extends `plus_until` (stacking onto
-remaining time), and records a success `Transaction` for the revenue dashboard.
-Returns the same shape as `GET /subscription`.
-
-> In production this endpoint would first verify an App Store / StoreKit receipt
-> before granting; the grant logic is otherwise identical. See
-> [DEPLOYMENT.md](./DEPLOYMENT.md).
+**Dev-only mock** purchase (gated by `LIM_ALLOW_MOCK_SUBSCRIBE`, default on):
+grants the entitlement, extends `plus_until` (stacking onto remaining time), and
+records a success `Transaction`. Returns the same shape as `GET /subscription`.
+Production should disable this (`LIM_ALLOW_MOCK_SUBSCRIBE=false`) and use
+`/subscription/verify`.
 
 Request (`subscribeReq`): `plan` must be `month` (¥18, +30 days) or `year`
 (¥98, +365 days).
@@ -631,7 +654,8 @@ Request (`subscribeReq`): `plan` must be `month` (¥18, +30 days) or `year`
 { "plan": "year" }
 ```
 
-Error: `400 {"error":"plan 必须为 month 或 year"}`.
+Errors: `400 {"error":"plan 必须为 month 或 year"}`,
+`403 {"error":"模拟开通已禁用…"}` when mock is disabled.
 
 ```bash
 curl -s -X POST http://localhost:8080/api/v1/subscription/subscribe \

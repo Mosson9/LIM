@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/mosson9/lim/backend/internal/ai"
+	"github.com/mosson9/lim/backend/internal/appstore"
 	"github.com/mosson9/lim/backend/internal/auth"
 	"github.com/mosson9/lim/backend/internal/store"
 )
@@ -17,6 +18,21 @@ type App struct {
 	engine     *ai.Engine
 	corsOrigin string
 	adminDir   string
+
+	// Billing (StoreKit 2 verification).
+	appstore       *appstore.Verifier
+	productMonthly string
+	productYearly  string
+	allowMock      bool
+}
+
+// ConfigureBilling wires App Store receipt verification and the product→plan
+// mapping. allowMock keeps the dev-only mock /subscribe endpoint available.
+func (a *App) ConfigureBilling(v *appstore.Verifier, monthly, yearly string, allowMock bool) {
+	a.appstore = v
+	a.productMonthly = monthly
+	a.productYearly = yearly
+	a.allowMock = allowMock
 }
 
 // NewApp constructs the API application. adminDir, when non-empty, serves the
@@ -69,6 +85,7 @@ func (a *App) Handler() http.Handler {
 	// --- Subscription ---
 	mux.HandleFunc("GET /api/v1/subscription", a.authenticate(a.handleSubscription))
 	mux.HandleFunc("POST /api/v1/subscription/subscribe", a.authenticate(a.handleSubscribe))
+	mux.HandleFunc("POST /api/v1/subscription/verify", a.authenticate(a.handleVerifySubscription))
 
 	// --- Admin ---
 	mux.HandleFunc("GET /api/v1/admin/overview", a.requireAdmin(a.handleAdminOverview))

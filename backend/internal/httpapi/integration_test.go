@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/mosson9/lim/backend/internal/ai"
+	"github.com/mosson9/lim/backend/internal/appstore"
 	"github.com/mosson9/lim/backend/internal/auth"
 	"github.com/mosson9/lim/backend/internal/httpapi"
 	"github.com/mosson9/lim/backend/internal/seed"
@@ -29,6 +30,9 @@ func newServer(t *testing.T) *httptest.Server {
 		t.Fatalf("seed: %v", err)
 	}
 	app := httpapi.NewApp(st, auth.New("test-secret", time.Hour), ai.New("", ""), "*", "")
+	// Enable the dev mock /subscribe; no App Store verifier roots in tests.
+	verifier, _ := appstore.New(nil, "app.lim.ios", "")
+	app.ConfigureBilling(verifier, "app.lim.ios.plus.monthly", "app.lim.ios.plus.yearly", true)
 	srv := httptest.NewServer(app.Handler())
 	t.Cleanup(srv.Close)
 	return srv
@@ -177,6 +181,26 @@ func TestAdminRBAC(t *testing.T) {
 	// Unauthenticated is rejected.
 	if code, _ := do(t, srv, "GET", "/api/v1/me", "", nil); code != http.StatusUnauthorized {
 		t.Errorf("no token → /me: got %d, want 401", code)
+	}
+}
+
+// TestSubscriptionVerifyWiring checks the StoreKit verify endpoint is wired and
+// rejects missing/invalid receipts. (Full crypto verification is covered by the
+// appstore package's tests with a generated certificate chain.)
+func TestSubscriptionVerifyWiring(t *testing.T) {
+	srv := newServer(t)
+	_, b := do(t, srv, "POST", "/api/v1/auth/register", "", map[string]any{
+		"email": "sk@test.com", "password": "secret1", "name": "S",
+	})
+	token := b["token"].(string)
+
+	// Missing jws → 400.
+	if code, _ := do(t, srv, "POST", "/api/v1/subscription/verify", token, map[string]any{}); code != http.StatusBadRequest {
+		t.Errorf("verify (no jws): got %d, want 400", code)
+	}
+	// Garbage jws → 400 (no trusted root configured in tests / not a valid JWS).
+	if code, _ := do(t, srv, "POST", "/api/v1/subscription/verify", token, map[string]any{"jws": "not.a.jws"}); code != http.StatusBadRequest {
+		t.Errorf("verify (bad jws): got %d, want 400", code)
 	}
 }
 

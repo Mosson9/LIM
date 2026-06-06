@@ -156,6 +156,13 @@ actor APIClient {
         struct Req: Encodable { let plan: String }
         return try await request("POST", "api/v1/subscription/subscribe", body: Req(plan: plan))
     }
+
+    /// Submit a StoreKit 2 signed transaction (JWS) for server-side verification
+    /// and entitlement grant. This is the production purchase path.
+    func verifySubscription(jws: String) async throws -> Subscription {
+        struct Req: Encodable { let jws: String }
+        return try await request("POST", "api/v1/subscription/verify", body: Req(jws: jws))
+    }
 }
 
 // MARK: - Encoding helpers

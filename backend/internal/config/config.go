@@ -26,6 +26,16 @@ type Config struct {
 	// to the built-in deterministic heuristic.
 	AnthropicKey   string
 	AnthropicModel string
+
+	// Apple StoreKit 2 receipt verification. AppleRootCert is a path to Apple's
+	// root ("Apple Root CA - G3") PEM; without it /subscription/verify rejects
+	// real receipts. AllowMockSubscribe keeps the dev-only mock /subscribe endpoint.
+	AppleBundleID      string
+	AppleEnv           string // "Production" | "Sandbox"
+	AppleRootCert      string // path to PEM
+	ProductMonthly     string
+	ProductYearly      string
+	AllowMockSubscribe bool
 }
 
 // Load reads configuration from environment variables.
@@ -43,6 +53,13 @@ func Load() Config {
 		AdminPassword:  env("LIM_ADMIN_PASSWORD", "admin123"),
 		AnthropicKey:   env("ANTHROPIC_API_KEY", ""),
 		AnthropicModel: env("LIM_ANTHROPIC_MODEL", "claude-sonnet-4-6"),
+
+		AppleBundleID:      env("LIM_APPLE_BUNDLE_ID", "app.lim.ios"),
+		AppleEnv:           env("LIM_APPLE_ENV", "Production"),
+		AppleRootCert:      env("LIM_APPLE_ROOT_CERT", ""),
+		ProductMonthly:     env("LIM_APPLE_PRODUCT_MONTHLY", "app.lim.ios.plus.monthly"),
+		ProductYearly:      env("LIM_APPLE_PRODUCT_YEARLY", "app.lim.ios.plus.yearly"),
+		AllowMockSubscribe: envBool("LIM_ALLOW_MOCK_SUBSCRIBE", true),
 	}
 }
 

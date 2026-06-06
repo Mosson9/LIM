@@ -4,6 +4,7 @@ import SwiftUI
 /// 一定推荐购买 😂" — lives in the pull-quote here.
 struct PlusView: View {
     @EnvironmentObject var model: AppModel
+    @StateObject private var sk = StoreKitService()
     @State private var plan = "year"
     @State private var perks: [PlusPerk] = []
     @State private var plans: [PlanOption] = []
@@ -12,7 +13,9 @@ struct PlusView: View {
     var body: some View {
         VStack(spacing: 0) {
             TopBar(leading: .close) {
-                Button("恢复购买") {}.font(Theme.sans(13)).foregroundColor(.white.opacity(0.5))
+                Button("恢复购买") {
+                    Task { if await sk.restore() { await model.refreshUser(); model.back() } }
+                }.font(Theme.sans(13)).foregroundColor(.white.opacity(0.5))
             }
             ScrollView {
                 VStack(spacing: 0) {
@@ -69,11 +72,13 @@ struct PlusView: View {
             VStack(spacing: 12) {
                 Button { Task { await subscribe() } } label: {
                     if working { ProgressView().tint(Theme.ink) }
-                    else {
-                        Text(plan == "year" ? "¥98 / 年 开启 Plus" : "¥18 / 月 开启 Plus")
-                    }
+                    else { Text(ctaTitle) }
                 }
                 .buttonStyle(FilledButtonStyle(bg: Theme.gold, fg: Theme.ink))
+                .disabled(working)
+                if let err = sk.error {
+                    Text(err).font(Theme.sans(12)).foregroundColor(Theme.danger)
+                }
                 Text("订阅自动续费，可随时在设置中取消 · 条款与隐私")
                     .font(Theme.sans(11)).foregroundColor(.white.opacity(0.4))
             }
@@ -83,7 +88,17 @@ struct PlusView: View {
         .task {
             perks = (try? await APIClient.shared.perks()) ?? model.perksFallback
             plans = (try? await APIClient.shared.plans()) ?? []
+            await sk.load()
         }
+    }
+
+    /// Prefer the App Store's localized price; fall back to the server's figure.
+    private var ctaTitle: String {
+        let pid = StoreKitService.productID(forPlan: plan)
+        if let product = sk.product(for: pid) {
+            return "\(product.displayPrice) 开启 Plus"
+        }
+        return plan == "year" ? "¥98 / 年 开启 Plus" : "¥18 / 月 开启 Plus"
     }
 
     private func planCard(_ p: PlanOption) -> some View {
@@ -113,9 +128,21 @@ struct PlusView: View {
     private func subscribe() async {
         working = true
         defer { working = false }
-        _ = try? await APIClient.shared.subscribe(plan: plan)
-        await model.refreshUser()
-        model.back()
+        let pid = StoreKitService.productID(forPlan: plan)
+        if let product = sk.product(for: pid) {
+            // Real StoreKit purchase → backend verifies the signed transaction.
+            if await sk.purchase(product) {
+                await model.refreshUser()
+                model.back()
+            }
+        } else {
+            // Dev fallback when StoreKit products are unavailable (no .storekit
+            // config / simulator without a signed-in sandbox account). Hits the
+            // mock /subscribe, which the backend disables in production.
+            _ = try? await APIClient.shared.subscribe(plan: plan)
+            await model.refreshUser()
+            model.back()
+        }
     }
 }
 

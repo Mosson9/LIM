@@ -1,0 +1,69 @@
+{
+  "appPolicies" : {
+    "eula" : "",
+    "policies" : []
+  },
+  "identifier" : "LIMPLUS01",
+  "nonRenewingSubscriptions" : [],
+  "products" : [],
+  "settings" : {
+    "_applicationInternalID" : "",
+    "_developerTeamID" : "",
+    "_lastSynchronizedDate" : 0
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "21490001",
+      "localizations" : [],
+      "name" : "LIM Plus",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [],
+          "codeOffers" : [],
+          "displayPrice" : "18.00",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "6480000001",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "无限次 AI 咨询、更快响应、专属皮肤",
+              "displayName" : "LIM Plus 月度",
+              "locale" : "zh_CN"
+            }
+          ],
+          "productID" : "app.lim.ios.plus.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "LIM Plus Monthly",
+          "subscriptionGroupID" : "21490001",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [],
+          "codeOffers" : [],
+          "displayPrice" : "98.00",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "6480000002",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "全年无限次 AI 咨询，省 ¥118",
+              "displayName" : "LIM Plus 年度",
+              "locale" : "zh_CN"
+            }
+          ],
+          "productID" : "app.lim.ios.plus.yearly",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "LIM Plus Yearly",
+          "subscriptionGroupID" : "21490001",
+          "type" : "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
+  }
+}
