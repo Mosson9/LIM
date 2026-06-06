@@ -21,7 +21,7 @@ import (
 // seeded with catalogue content and a bootstrap admin (no demo data).
 func newServer(t *testing.T) *httptest.Server {
 	t.Helper()
-	st, err := store.Open(filepath.Join(t.TempDir(), "data.json"))
+	st, err := store.OpenFile(filepath.Join(t.TempDir(), "data.json"))
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}

@@ -18,6 +18,9 @@ services:
       # Serve the static admin web app from the bind-mount below, same origin.
       # Visit http://localhost:8080/admin/ (admin@lim.app / admin123).
       LIM_ADMIN_DIR: "/admin"
+      # Persistence: defaults to the JSON file store in /data. To use Postgres
+      # instead, uncomment the `db` service below and this line:
+      # LIM_DATABASE_URL: "postgres://lim:lim@db:5432/lim?sslmode=disable"
       # Optional: enable the Claude-backed analysis engine.
       # ANTHROPIC_API_KEY: "sk-ant-..."
       # LIM_ANTHROPIC_MODEL: "claude-sonnet-4-6"
@@ -31,6 +34,26 @@ services:
       timeout: 3s
       retries: 3
       start_period: 5s
+    # depends_on:
+    #   db:
+    #     condition: service_healthy
+
+  # Uncomment to run with Postgres instead of the JSON file store.
+  # db:
+  #   image: postgres:16-alpine
+  #   restart: unless-stopped
+  #   environment:
+  #     POSTGRES_USER: lim
+  #     POSTGRES_PASSWORD: lim
+  #     POSTGRES_DB: lim
+  #   volumes:
+  #     - lim-pg:/var/lib/postgresql/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U lim"]
+  #     interval: 5s
+  #     timeout: 3s
+  #     retries: 10
 
 volumes:
   lim-data:
+  # lim-pg:

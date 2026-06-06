@@ -5,8 +5,9 @@ admin dashboard. It runs the six-dimension purchase analysis, tracks decisions,
 savings, the cooling-off wishlist, subscriptions, and exposes admin analytics.
 
 - **Language:** Go 1.25+ (standard-library HTTP, minimal deps)
-- **Storage:** in-memory with a JSON-file snapshot — zero external services,
-  persists across restarts, swappable for Postgres behind the `store` seam
+- **Storage:** two interchangeable `store.Store` implementations — a zero-config
+  JSON-file snapshot store (default) and a real Postgres store
+  (`LIM_DATABASE_URL`). Both seed themselves and persist across restarts.
 - **Auth:** JWT (HS256) + bcrypt
 - **AI:** deterministic six-dimension heuristic by default; optional Claude
   (Anthropic) when `ANTHROPIC_API_KEY` is set, with graceful fallback
@@ -68,7 +69,8 @@ has a default so it runs with zero config.
 | Variable | Default | Purpose |
 |---|---|---|
 | `LIM_ADDR` | `:8080` | listen address |
-| `LIM_DATA_FILE` | `lim-data.json` | JSON snapshot store path |
+| `LIM_DATA_FILE` | `lim-data.json` | JSON snapshot store path (file store) |
+| `LIM_DATABASE_URL` | — | use Postgres instead of the file store |
 | `LIM_JWT_SECRET` | `dev-secret-change-me` | **change in production** |
 | `LIM_TOKEN_TTL_HOURS` | `720` | access-token lifetime |
 | `LIM_CORS_ORIGIN` | `*` | allowed origin for the admin web app |
@@ -82,6 +84,25 @@ has a default so it runs with zero config.
 ```bash
 docker compose up --build      # serves :8080, data persisted in a volume
 ```
+
+## Storage backends
+
+Everything behind the HTTP layer talks to the `store.Store` interface
+(`internal/store/interface.go`), so the backing store is a drop-in choice:
+
+- **File store (default)** — in-memory state snapshotted to JSON
+  (`internal/store/store.go`). Zero setup; great for dev and single-node.
+- **Postgres** — set `LIM_DATABASE_URL` (`internal/store/postgres.go`). The
+  schema is created on boot; entities are stored as JSONB with promoted columns
+  for lookups; catalogue/admin/demo data seed on first run exactly as with the
+  file store.
+
+```bash
+LIM_DATABASE_URL="postgres://lim:lim@localhost:5432/lim?sslmode=disable" make run
+```
+
+No handler, seeder, or test changes are needed to switch — they depend only on
+the interface.
 
 ## Layout
 

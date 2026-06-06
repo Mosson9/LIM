@@ -13,7 +13,7 @@ import (
 
 // Run seeds catalogue content always, and demo data when demo is true. It also
 // ensures a bootstrap admin account exists.
-func Run(s *store.Store, demo bool, adminEmail, adminPassword string) error {
+func Run(s store.Store, demo bool, adminEmail, adminPassword string) error {
 	if err := seedCatalogue(s); err != nil {
 		return err
 	}
@@ -60,7 +60,7 @@ func DefaultAIConfig() models.AIConfig {
 	}
 }
 
-func seedCatalogue(s *store.Store) error {
+func seedCatalogue(s store.Store) error {
 	if err := s.SetAIConfig(DefaultAIConfig()); err != nil {
 		return err
 	}
@@ -107,7 +107,7 @@ func seedCatalogue(s *store.Store) error {
 	return s.SetPerks(perks)
 }
 
-func ensureAdmin(s *store.Store, email, password string) error {
+func ensureAdmin(s store.Store, email, password string) error {
 	if _, err := s.GetUserByEmail(email); err == nil {
 		return nil // already exists
 	}
@@ -139,7 +139,7 @@ type demoUser struct {
 	lastAgo time.Duration
 }
 
-func seedDemo(s *store.Store) error {
+func seedDemo(s store.Store) error {
 	now := time.Now()
 	hash, _ := auth.HashPassword("password")
 

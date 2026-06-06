@@ -1,10 +1,11 @@
 // Package store is the persistence layer for LIM.
 //
-// The default implementation keeps all state in memory and snapshots it to a
-// JSON file on every mutation, which makes the server runnable with zero
-// external services while still surviving restarts. The Store type is the only
-// thing the HTTP layer depends on, so a Postgres-backed implementation can be
-// dropped in later without touching the handlers (see docs/DEPLOYMENT.md).
+// The rest of the application depends only on the Store interface
+// (interface.go). Two implementations satisfy it: FileStore (this file) keeps
+// all state in memory and snapshots it to a JSON file on every mutation, making
+// the server runnable with zero external services while surviving restarts;
+// PostgresStore (postgres.go) backs real deployments. Pick one via Open / the
+// LIM_DATABASE_URL env var — nothing else changes (see docs/DEPLOYMENT.md).
 package store
 
 import (
@@ -43,10 +44,14 @@ type state struct {
 	TxnSeq       int                             `json:"txn_seq"`
 	UserSeq      int                             `json:"user_seq"`
 	PushSeq      int                             `json:"push_seq"`
+	// Secrets holds password hashes keyed by user id. They live here rather than
+	// on User (which is `json:"-"` so it never leaks through the API) so they
+	// still survive a snapshot/restore round-trip.
+	Secrets map[string]string `json:"secrets"`
 }
 
 // Store is a concurrency-safe, file-backed data store.
-type Store struct {
+type FileStore struct {
 	mu    sync.RWMutex
 	path  string
 	st    state
@@ -55,8 +60,8 @@ type Store struct {
 
 // Open loads the store from path, or returns an empty (unseeded) store if the
 // file does not exist. Callers should seed an empty store.
-func Open(path string) (*Store, error) {
-	s := &Store{path: path, email: map[string]string{}}
+func OpenFile(path string) (*FileStore, error) {
+	s := &FileStore{path: path, email: map[string]string{}}
 	s.st = state{
 		Users:        map[string]*models.User{},
 		Decisions:    map[string]*models.Decision{},
@@ -74,18 +79,24 @@ func Open(path string) (*Store, error) {
 	if err := json.Unmarshal(data, &s.st); err != nil {
 		return nil, fmt.Errorf("decode store: %w", err)
 	}
+	// Reattach password hashes (stripped from User by `json:"-"`).
+	for id, u := range s.st.Users {
+		if h, ok := s.st.Secrets[id]; ok {
+			u.PasswordHash = h
+		}
+	}
 	s.reindex()
 	return s, nil
 }
 
 // IsEmpty reports whether the store has no users (i.e. needs seeding).
-func (s *Store) IsEmpty() bool {
+func (s *FileStore) IsEmpty() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return len(s.st.Users) == 0
 }
 
-func (s *Store) reindex() {
+func (s *FileStore) reindex() {
 	s.email = make(map[string]string, len(s.st.Users))
 	for id, u := range s.st.Users {
 		s.email[strings.ToLower(u.Email)] = id
@@ -93,9 +104,14 @@ func (s *Store) reindex() {
 }
 
 // persist writes the current state to disk atomically. Caller must hold s.mu.
-func (s *Store) persist() error {
+func (s *FileStore) persist() error {
 	if s.path == "" {
 		return nil
+	}
+	// Capture password hashes separately so the snapshot retains them.
+	s.st.Secrets = make(map[string]string, len(s.st.Users))
+	for id, u := range s.st.Users {
+		s.st.Secrets[id] = u.PasswordHash
 	}
 	data, err := json.MarshalIndent(s.st, "", "  ")
 	if err != nil {
@@ -109,7 +125,7 @@ func (s *Store) persist() error {
 }
 
 // Save flushes the store to disk (used by the seeder).
-func (s *Store) Save() error {
+func (s *FileStore) Save() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.persist()
@@ -118,7 +134,7 @@ func (s *Store) Save() error {
 // --- Users ---
 
 // CreateUser inserts a new user, assigning IDs and a friendly display id.
-func (s *Store) CreateUser(u *models.User) error {
+func (s *FileStore) CreateUser(u *models.User) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	key := strings.ToLower(u.Email)
@@ -142,7 +158,7 @@ func (s *Store) CreateUser(u *models.User) error {
 }
 
 // GetUser returns a copy of the user with the given id.
-func (s *Store) GetUser(id string) (*models.User, error) {
+func (s *FileStore) GetUser(id string) (*models.User, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	u, ok := s.st.Users[id]
@@ -154,7 +170,7 @@ func (s *Store) GetUser(id string) (*models.User, error) {
 }
 
 // GetUserByEmail looks a user up by (case-insensitive) email.
-func (s *Store) GetUserByEmail(email string) (*models.User, error) {
+func (s *FileStore) GetUserByEmail(email string) (*models.User, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	id, ok := s.email[strings.ToLower(email)]
@@ -167,7 +183,7 @@ func (s *Store) GetUserByEmail(email string) (*models.User, error) {
 }
 
 // UpdateUser replaces the stored user (matched by ID).
-func (s *Store) UpdateUser(u *models.User) error {
+func (s *FileStore) UpdateUser(u *models.User) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.st.Users[u.ID]; !ok {
@@ -180,7 +196,7 @@ func (s *Store) UpdateUser(u *models.User) error {
 }
 
 // ListUsers returns all users sorted by most-recently-active first.
-func (s *Store) ListUsers() []*models.User {
+func (s *FileStore) ListUsers() []*models.User {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	out := make([]*models.User, 0, len(s.st.Users))
@@ -193,7 +209,7 @@ func (s *Store) ListUsers() []*models.User {
 }
 
 // TouchUser updates a user's last-active timestamp (best-effort).
-func (s *Store) TouchUser(id string) {
+func (s *FileStore) TouchUser(id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if u, ok := s.st.Users[id]; ok {
@@ -205,7 +221,7 @@ func (s *Store) TouchUser(id string) {
 // --- Decisions ---
 
 // CreateDecision stores a decision, assigning a friendly D-##### id.
-func (s *Store) CreateDecision(d *models.Decision) error {
+func (s *FileStore) CreateDecision(d *models.Decision) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if d.ID == "" {
@@ -221,7 +237,7 @@ func (s *Store) CreateDecision(d *models.Decision) error {
 }
 
 // GetDecision returns a copy of one decision.
-func (s *Store) GetDecision(id string) (*models.Decision, error) {
+func (s *FileStore) GetDecision(id string) (*models.Decision, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	d, ok := s.st.Decisions[id]
@@ -233,7 +249,7 @@ func (s *Store) GetDecision(id string) (*models.Decision, error) {
 }
 
 // UpdateDecision replaces a decision (matched by ID).
-func (s *Store) UpdateDecision(d *models.Decision) error {
+func (s *FileStore) UpdateDecision(d *models.Decision) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.st.Decisions[d.ID]; !ok {
@@ -246,7 +262,7 @@ func (s *Store) UpdateDecision(d *models.Decision) error {
 
 // ListDecisions returns a user's decisions (newest first), optionally filtered
 // by status ("all"/""/"resist"/"buy"/"pending").
-func (s *Store) ListDecisions(userID, filter string) []*models.Decision {
+func (s *FileStore) ListDecisions(userID, filter string) []*models.Decision {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	out := []*models.Decision{}
@@ -265,7 +281,7 @@ func (s *Store) ListDecisions(userID, filter string) []*models.Decision {
 }
 
 // ListAllDecisions returns every decision (admin feed), newest first.
-func (s *Store) ListAllDecisions(filter string) []*models.Decision {
+func (s *FileStore) ListAllDecisions(filter string) []*models.Decision {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	out := []*models.Decision{}
@@ -298,7 +314,7 @@ func decisionMatches(d *models.Decision, filter string) bool {
 // --- Wishlist ---
 
 // AddWishlist parks an item in the cooling-off list.
-func (s *Store) AddWishlist(w *models.WishlistItem) error {
+func (s *FileStore) AddWishlist(w *models.WishlistItem) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if w.ID == "" {
@@ -310,7 +326,7 @@ func (s *Store) AddWishlist(w *models.WishlistItem) error {
 }
 
 // GetWishlistItem returns one wishlist entry.
-func (s *Store) GetWishlistItem(id string) (*models.WishlistItem, error) {
+func (s *FileStore) GetWishlistItem(id string) (*models.WishlistItem, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	w, ok := s.st.Wishlist[id]
@@ -322,7 +338,7 @@ func (s *Store) GetWishlistItem(id string) (*models.WishlistItem, error) {
 }
 
 // ListWishlist returns a user's wishlist (soonest-expiring first).
-func (s *Store) ListWishlist(userID string) []*models.WishlistItem {
+func (s *FileStore) ListWishlist(userID string) []*models.WishlistItem {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	out := []*models.WishlistItem{}
@@ -338,7 +354,7 @@ func (s *Store) ListWishlist(userID string) []*models.WishlistItem {
 }
 
 // DeleteWishlist removes a wishlist entry.
-func (s *Store) DeleteWishlist(id string) error {
+func (s *FileStore) DeleteWishlist(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.st.Wishlist[id]; !ok {
@@ -351,7 +367,7 @@ func (s *Store) DeleteWishlist(id string) error {
 // --- Transactions ---
 
 // AddTransaction records a payment.
-func (s *Store) AddTransaction(t *models.Transaction) error {
+func (s *FileStore) AddTransaction(t *models.Transaction) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if t.ID == "" {
@@ -367,7 +383,7 @@ func (s *Store) AddTransaction(t *models.Transaction) error {
 }
 
 // ListTransactions returns all transactions, newest first.
-func (s *Store) ListTransactions() []*models.Transaction {
+func (s *FileStore) ListTransactions() []*models.Transaction {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	out := make([]*models.Transaction, 0, len(s.st.Transactions))
@@ -382,14 +398,14 @@ func (s *Store) ListTransactions() []*models.Transaction {
 // --- Config & content (singletons / lists) ---
 
 // AIConfig returns the live engine configuration.
-func (s *Store) AIConfig() models.AIConfig {
+func (s *FileStore) AIConfig() models.AIConfig {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.st.AIConfig
 }
 
 // SetAIConfig replaces the engine configuration.
-func (s *Store) SetAIConfig(c models.AIConfig) error {
+func (s *FileStore) SetAIConfig(c models.AIConfig) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	c.UpdatedAt = time.Now()
@@ -398,14 +414,14 @@ func (s *Store) SetAIConfig(c models.AIConfig) error {
 }
 
 // Categories returns the spending categories.
-func (s *Store) Categories() []models.Category {
+func (s *FileStore) Categories() []models.Category {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return append([]models.Category(nil), s.st.Categories...)
 }
 
 // SetCategories replaces the category list.
-func (s *Store) SetCategories(c []models.Category) error {
+func (s *FileStore) SetCategories(c []models.Category) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.st.Categories = c
@@ -413,28 +429,28 @@ func (s *Store) SetCategories(c []models.Category) error {
 }
 
 // Skins returns the app-icon skins.
-func (s *Store) Skins() []models.Skin {
+func (s *FileStore) Skins() []models.Skin {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return append([]models.Skin(nil), s.st.Skins...)
 }
 
 // Plans returns the purchasable subscription tiers.
-func (s *Store) Plans() []models.PlanOption {
+func (s *FileStore) Plans() []models.PlanOption {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return append([]models.PlanOption(nil), s.st.Plans...)
 }
 
 // Perks returns the Plus marketing bullets.
-func (s *Store) Perks() []models.PlusPerk {
+func (s *FileStore) Perks() []models.PlusPerk {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return append([]models.PlusPerk(nil), s.st.Perks...)
 }
 
 // Pushes returns operations campaigns, newest first.
-func (s *Store) Pushes() []*models.Push {
+func (s *FileStore) Pushes() []*models.Push {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	out := make([]*models.Push, 0, len(s.st.Pushes))
@@ -447,7 +463,7 @@ func (s *Store) Pushes() []*models.Push {
 }
 
 // CreatePush stores a campaign.
-func (s *Store) CreatePush(p *models.Push) error {
+func (s *FileStore) CreatePush(p *models.Push) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if p.ID == "" {
@@ -463,7 +479,7 @@ func (s *Store) CreatePush(p *models.Push) error {
 }
 
 // SetSkins replaces the app-icon skin catalogue.
-func (s *Store) SetSkins(v []models.Skin) error {
+func (s *FileStore) SetSkins(v []models.Skin) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.st.Skins = v
@@ -471,7 +487,7 @@ func (s *Store) SetSkins(v []models.Skin) error {
 }
 
 // SetPlans replaces the subscription tiers.
-func (s *Store) SetPlans(v []models.PlanOption) error {
+func (s *FileStore) SetPlans(v []models.PlanOption) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.st.Plans = v
@@ -479,7 +495,7 @@ func (s *Store) SetPlans(v []models.PlanOption) error {
 }
 
 // SetPerks replaces the Plus marketing bullets.
-func (s *Store) SetPerks(v []models.PlusPerk) error {
+func (s *FileStore) SetPerks(v []models.PlusPerk) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.st.Perks = v

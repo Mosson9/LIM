@@ -158,14 +158,32 @@ Before exposing LIM to real users:
 8. **Run a single instance** while on the JSON store. Two processes pointed at the
    same file will clobber each other. Scale out only after migrating to Postgres.
 
-### <a id="migrating-to-postgres"></a>Migrating to Postgres
+### <a id="migrating-to-postgres"></a>Using Postgres
 
-The codebase is deliberately structured so the storage engine can be swapped
-**without touching the HTTP handlers, models, routes, or business logic**.
+Postgres is a **first-class, implemented backend** — not a future task. Set one
+env var and the server uses it:
 
-**The seam.** `internal/httpapi` depends on exactly one persistence type:
-`*store.Store`. Handlers only ever call its methods — they never open files or
-marshal JSON themselves. The full method surface is:
+```bash
+LIM_DATABASE_URL="postgres://lim:lim@localhost:5432/lim?sslmode=disable" make run
+# or via docker compose: uncomment the `db` service + LIM_DATABASE_URL line
+```
+
+On boot it creates its schema (`CREATE TABLE IF NOT EXISTS …`) and, on first run
+(`IsEmpty()`), seeds catalogue/admin/demo data exactly like the file store. No
+other configuration is required.
+
+**The seam.** Everything behind the HTTP layer depends only on the
+`store.Store` **interface** (`internal/store/interface.go`); `httpapi.App` and
+`seed.Run` accept that interface, and `store.Open(databaseURL, dataFile)` picks
+the implementation. The two implementations are:
+
+| Implementation | File | Selected when |
+|---|---|---|
+| `FileStore` (JSON snapshot) | `internal/store/store.go` | `LIM_DATABASE_URL` empty (default) |
+| `PostgresStore` | `internal/store/postgres.go` | `LIM_DATABASE_URL` set |
+
+The interface surface (both implementations satisfy it; enforced by
+`var _ Store = (*FileStore)(nil)` / `(*PostgresStore)(nil)`):
 
 ```
 Users:        CreateUser, GetUser, GetUserByEmail, UpdateUser, ListUsers, TouchUser
@@ -174,40 +192,30 @@ Wishlist:     AddWishlist, GetWishlistItem, ListWishlist, DeleteWishlist
 Transactions: AddTransaction, ListTransactions
 Config/content: AIConfig/SetAIConfig, Categories/SetCategories, Skins/SetSkins,
                 Plans/SetPlans, Perks/SetPerks, Pushes/CreatePush
-Lifecycle:    Open, IsEmpty, Save
+Lifecycle:    IsEmpty, Save
 Errors:       ErrNotFound, ErrDuplicate
 ```
 
-**Recommended steps:**
-
-1. **Extract an interface.** Define a `store.Backend` (or similarly named)
-   interface listing the methods above, and make the file store one
-   implementation of it. Change `httpapi.App` and `seed.Run` to accept the
-   interface instead of the concrete `*store.Store`. (Today they take the
-   concrete type; this is the one small refactor required.)
-2. **Add a Postgres implementation.** Create `store/postgres.go` implementing the
-   same methods over `database/sql` (e.g. with `pgx`). Map each entity to a table:
-   `users`, `decisions`, `wishlist`, `transactions`, `pushes`, and a small
-   singletons/`content` table (or dedicated tables) for `ai_config`, `categories`,
-   `skins`, `plans`, `perks`. Preserve the existing ID formats (`U-#####`,
-   `D-#####`, `T-####`, `P-###`) or switch to DB sequences/UUIDs — the API only
-   requires that IDs are unique strings.
-3. **Preserve semantics.** Keep `GetUserByEmail` case-insensitive, return
-   `ErrNotFound`/`ErrDuplicate` where the handlers expect them, and keep list
-   ordering (decisions newest-first, wishlist soonest-expiring-first, users
-   most-recently-active-first) so behaviour is identical.
-4. **Wire it in `main.go`.** Select the backend by env (e.g. a `DATABASE_URL`):
-   open Postgres when present, else the JSON file store. Seeding still keys off
-   `IsEmpty()`.
-5. **Migrate data (optional).** Read the existing `lim-data.json` with the JSON
-   store and copy every record into the Postgres backend via the shared
-   interface — a short one-off script.
+**How `PostgresStore` maps the model** (`database/sql` + `lib/pq`): each entity
+is stored as a JSONB `doc` (reusing the models' json tags) with a few promoted
+columns for indexed lookups — `users(id, email, password_hash, last_active, doc)`,
+`decisions(id, user_id, status, verdict, created_at, doc)`,
+`wishlist(id, user_id, expires_at, doc)`, `transactions`, `pushes`, plus a `kv`
+table for the singletons (`ai_config`, `categories`, `skins`, `plans`, `perks`)
+and a `counters` table that reproduces the friendly id formats (`U-#####`,
+`D-#####`, `T-####`, `P-###`). It preserves the file store's semantics:
+case-insensitive email lookup, `ErrNotFound`/`ErrDuplicate`, and identical list
+ordering. Password hashes live in their own column (User omits them from JSON).
 
 Because the handlers are written against the seam, **none of `internal/httpapi`,
-`internal/models`, `internal/ai`, or the routes change.** Derived statistics
-(`/stats`, admin aggregates) keep working unchanged because they are computed in
-the handlers from the records the store returns — see
+`internal/models`, `internal/ai`, the routes, or the tests change** when you
+switch — the HTTP integration tests run against the file store, and the same
+calls work against Postgres. Derived statistics (`/stats`, admin aggregates) are
+computed in the handlers from the records the store returns — see
 [DATA_MODEL.md](./DATA_MODEL.md#derived-statistics).
+
+> Note: a live Postgres is required to integration-test the Postgres path; the
+> default file store needs nothing and is what CI exercises.
 
 ---
 

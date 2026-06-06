@@ -39,7 +39,7 @@ func main() {
 		return
 	}
 
-	st, err := store.Open(cfg.DataFile)
+	st, err := store.Open(cfg.DatabaseURL, cfg.DataFile)
 	if err != nil {
 		log.Fatalf("open store: %v", err)
 	}
@@ -69,7 +69,11 @@ func main() {
 		if engine.UsesLLM() {
 			mode = "claude (" + cfg.AnthropicModel + ")"
 		}
-		log.Printf("LIM API listening on %s · store=%s · ai=%s", cfg.Addr, cfg.DataFile, mode)
+		storeKind := "file:" + cfg.DataFile
+		if cfg.DatabaseURL != "" {
+			storeKind = "postgres"
+		}
+		log.Printf("LIM API listening on %s · store=%s · ai=%s", cfg.Addr, storeKind, mode)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("server: %v", err)
 		}

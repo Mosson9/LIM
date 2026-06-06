@@ -12,6 +12,7 @@ import (
 type Config struct {
 	Addr          string        // listen address, e.g. ":8080"
 	DataFile      string        // JSON snapshot path for the file store
+	DatabaseURL   string        // if set, use Postgres instead of the file store
 	JWTSecret     string        // HMAC secret for signing tokens
 	TokenTTL      time.Duration // access-token lifetime
 	CORSOrigin    string        // allowed origin for the admin web app ("*" for any)
@@ -32,6 +33,7 @@ func Load() Config {
 	return Config{
 		Addr:           env("LIM_ADDR", ":8080"),
 		DataFile:       env("LIM_DATA_FILE", "lim-data.json"),
+		DatabaseURL:    env("LIM_DATABASE_URL", ""),
 		JWTSecret:      env("LIM_JWT_SECRET", "dev-secret-change-me"),
 		TokenTTL:       time.Duration(envInt("LIM_TOKEN_TTL_HOURS", 720)) * time.Hour,
 		CORSOrigin:     env("LIM_CORS_ORIGIN", "*"),

@@ -42,10 +42,10 @@ system. For the REST contract see [API.md](./API.md); for entities see
   holds a JWT for the signed-in user. UI strings are Chinese.
 * **REST API (Go)** — one binary, one `http.ServeMux`, serving *both* the
   consumer endpoints and the admin dashboard endpoints under `/api/v1`.
-* **JSON file store** — the entire database is a single JSON file
-  (`lim-data.json`) snapshotted on every write. Zero external services; survives
-  restarts. A `store.Store` seam lets a real database (e.g. Postgres) replace it
-  later without touching the handlers.
+* **Storage (`store.Store` interface)** — two implementations: a JSON **file
+  store** (default; the whole DB is `lim-data.json`, snapshotted on every write —
+  zero external services, survives restarts) and a **Postgres store**
+  (`LIM_DATABASE_URL`). Selected at startup; handlers never know which.
 * **Claude (optional)** — when `ANTHROPIC_API_KEY` is configured, the analysis
   engine asks Claude for the six-dimension scoring and **gracefully falls back**
   to the built-in deterministic heuristic on any error. With no key, the app is
@@ -153,13 +153,14 @@ standard library. Routing uses Go 1.22+ `http.ServeMux` method+path patterns
 
 ### The store seam · 为什么换数据库很容易
 
-`internal/httpapi` only ever calls methods on `*store.Store` (`CreateUser`,
-`GetDecision`, `ListWishlist`, `SetAIConfig`, …). It never touches files or JSON
-directly. The default `Store` keeps state in memory and writes a JSON snapshot on
-every mutation, which is why the server needs **zero external services** yet
-**survives restarts**. To move to Postgres you re-implement that same method set
-against SQL — the handlers, models, and routes are untouched. See
-[DEPLOYMENT.md → Migrating to Postgres](./DEPLOYMENT.md#migrating-to-postgres).
+`internal/httpapi` only ever calls methods on the `store.Store` **interface**
+(`CreateUser`, `GetDecision`, `ListWishlist`, `SetAIConfig`, …). It never touches
+files or SQL directly. Two implementations ship today: the default `FileStore`
+keeps state in memory and writes a JSON snapshot on every mutation (so the server
+needs **zero external services** yet **survives restarts**), and `PostgresStore`
+backs real deployments. `store.Open(databaseURL, dataFile)` picks one from config
+— the handlers, models, and routes are identical either way. See
+[DEPLOYMENT.md → Using Postgres](./DEPLOYMENT.md#migrating-to-postgres).
 
 ---
 
@@ -326,26 +327,30 @@ LIM/
 │       ├── seed/
 │       │   └── seed.go              # catalogue + bootstrap admin + demo data
 │       └── store/
-│           └── store.go            # file-backed JSON store (the persistence seam)
+│           ├── interface.go        # Store interface + Open() factory (the seam)
+│           ├── store.go            # FileStore — in-memory + JSON snapshot
+│           └── postgres.go         # PostgresStore — database/sql + lib/pq
 │
-└── ios/                             # SwiftUI app — IN PROGRESS (planned tree)
-    ├── Package.swift                # SPM manifest
-    ├── project.yml                  # XcodeGen project spec
+├── admin/                          # Admin web app — zero-build vanilla JS SPA
+│   ├── index.html                  # shell + API base resolution
+│   ├── styles.css                  # design tokens (ported from the prototype)
+│   └── app.js                      # router, API client, 8 pages, inline-SVG charts
+│
+└── ios/                            # SwiftUI app (iOS 16+)
+    ├── project.yml                 # XcodeGen project spec → LIM.xcodeproj
     ├── README.md
+    ├── Resources/                  # Info.plist (base URL + ATS), Assets.xcassets
     └── Sources/
         └── LIM/
-            ├── LIMApp.swift         # @main App entrypoint
-            ├── Theme/               # design tokens (Theme.swift — colors, fonts, radii)
-            ├── Models/              # Codable mirrors of the API JSON
-            ├── Networking/          # APIClient, endpoints, auth header, decoding
-            ├── Store/               # observable app state / session
-            ├── Components/          # reusable SwiftUI views (cards, gauges, tree…)
-            └── Screens/             # onboarding, analyze, result, wishlist,
-                                     #   growth, history, subscription, profile
+            ├── LIMApp.swift        # @main App entrypoint + root routing
+            ├── Theme/              # design tokens + reusable styled components
+            ├── Models/             # Codable mirrors of the API JSON
+            ├── Networking/         # APIClient (async/await), config
+            ├── Store/              # AppModel — session, navigation, data cache
+            ├── Components/         # Icon, charts (dial/radar/tree/bars), tab bar
+            └── Screens/            # 14 screens: onboarding, ask, analyzing,
+                                    #   result, growth, history, plus, me …
 ```
-
-> The iOS tree above is the **planned** structure; only `Theme/Theme.swift`
-> exists today. It is documented here so the app and docs stay in lock-step.
 
 ---
 

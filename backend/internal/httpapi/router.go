@@ -12,7 +12,7 @@ import (
 
 // App carries the shared dependencies for every handler.
 type App struct {
-	store      *store.Store
+	store      store.Store
 	auth       *auth.Manager
 	engine     *ai.Engine
 	corsOrigin string
@@ -21,7 +21,7 @@ type App struct {
 
 // NewApp constructs the API application. adminDir, when non-empty, serves the
 // static admin web app from that directory at /admin/.
-func NewApp(s *store.Store, a *auth.Manager, e *ai.Engine, corsOrigin, adminDir string) *App {
+func NewApp(s store.Store, a *auth.Manager, e *ai.Engine, corsOrigin, adminDir string) *App {
 	return &App{store: s, auth: a, engine: e, corsOrigin: corsOrigin, adminDir: adminDir}
 }
 
