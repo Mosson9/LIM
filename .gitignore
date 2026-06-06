@@ -1,0 +1,19 @@
+# Backend
+backend/bin/
+backend/lim-data.json
+backend/lim-data.json.tmp
+backend/.env
+
+# iOS — generated project + build artefacts
+ios/LIM.xcodeproj/
+ios/build/
+ios/DerivedData/
+*.xcuserstate
+ios/.swiftpm/
+
+# OS / editor
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/

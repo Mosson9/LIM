@@ -1,0 +1,31 @@
+services:
+  api:
+    build: .
+    image: lim-backend:latest
+    container_name: lim-api
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      LIM_ADDR: ":8080"
+      LIM_DATA_FILE: "/data/lim-data.json"
+      # Change these for any non-local deployment.
+      LIM_JWT_SECRET: "change-me-in-production"
+      LIM_ADMIN_EMAIL: "admin@lim.app"
+      LIM_ADMIN_PASSWORD: "admin123"
+      LIM_CORS_ORIGIN: "*"
+      LIM_SEED_DEMO: "true"
+      # Optional: enable the Claude-backed analysis engine.
+      # ANTHROPIC_API_KEY: "sk-ant-..."
+      # LIM_ANTHROPIC_MODEL: "claude-sonnet-4-6"
+    volumes:
+      - lim-data:/data
+    healthcheck:
+      test: ["CMD", "/app/lim-server", "-healthcheck"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  lim-data:

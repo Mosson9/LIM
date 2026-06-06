@@ -1,0 +1,33 @@
+# XcodeGen spec — generates LIM.xcodeproj.
+#   brew install xcodegen
+#   cd ios && xcodegen generate && open LIM.xcodeproj
+name: LIM
+options:
+  bundleIdPrefix: app.lim
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    DEVELOPMENT_LANGUAGE: zh-Hans
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+
+targets:
+  LIM:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+      - path: Resources/Assets.xcassets
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.lim.ios
+        INFOPLIST_FILE: Resources/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        ENABLE_PREVIEWS: "YES"
+        TARGETED_DEVICE_FAMILY: "1"
+        IPHONEOS_DEPLOYMENT_TARGET: "16.0"

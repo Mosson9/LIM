@@ -1,0 +1,15 @@
+# Binaries
+/bin/
+lim-server
+
+# Local data store (JSON snapshot) and temp files
+lim-data.json
+lim-data.json.tmp
+*.db
+
+# Env
+.env
+
+# OS / editor
+.DS_Store
+*.swp
