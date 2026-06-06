@@ -61,10 +61,12 @@ func NewApp(s store.Store, a *auth.Manager, e *ai.Engine, corsOrigin, adminDir s
 func (a *App) Handler() http.Handler {
 	mux := http.NewServeMux()
 
-	// --- Health ---
+	// --- Health & API docs ---
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "llm": a.engine.UsesLLM()})
 	})
+	mux.HandleFunc("GET /openapi.yaml", a.handleOpenAPISpec)
+	mux.HandleFunc("GET /docs", a.handleDocs)
 
 	// --- Auth (public, stricter per-IP rate limit to slow brute force) ---
 	mux.HandleFunc("POST /api/v1/auth/register", a.limit(a.authLimiter, a.handleRegister))

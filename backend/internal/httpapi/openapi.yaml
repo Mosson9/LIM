@@ -1,0 +1,552 @@
+openapi: 3.0.3
+info:
+  title: LIM API
+  description: |
+    REST API for **LIM (Less is More)** — an anti-consumerism companion. Powers
+    the iOS app and the admin dashboard. Auth is JWT (bearer). The analysis engine
+    scores a purchase across six dimensions (need / alt / emo / value / money /
+    env) into a 0–100 impulse index and a verdict (buy / pause / resist).
+
+    Demo credentials: admin `admin@lim.app` / `admin123`; user `lin@lim.app` / `password`.
+  version: "1.0.0"
+servers:
+  - url: http://localhost:8080
+    description: Local
+security:
+  - bearerAuth: []
+tags:
+  - name: Auth
+  - name: Me
+  - name: Meta
+  - name: Analyze
+  - name: Wishlist
+  - name: Stats
+  - name: Subscription
+  - name: Admin
+
+paths:
+  /healthz:
+    get:
+      tags: [Meta]
+      summary: Health check
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  llm: { type: boolean }
+
+  /api/v1/auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new account
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, minLength: 6 }
+                name: { type: string }
+                profile: { $ref: "#/components/schemas/Profile" }
+      responses:
+        "200": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/AuthResponse" } } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /api/v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: Log in
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AuthResponse" } } } }
+        "401": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+
+  /api/v1/me:
+    get:
+      tags: [Me]
+      summary: Current user
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/User" } } } }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /api/v1/me/profile:
+    put:
+      tags: [Me]
+      summary: Update financial profile
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/Profile" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/User" } } } }
+
+  /api/v1/me/onboard:
+    post:
+      tags: [Me]
+      summary: Mark onboarding complete
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/User" } } } }
+
+  /api/v1/me/app-icon:
+    put:
+      tags: [Me]
+      summary: Set the home-screen app icon
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { app_icon: { type: string } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/User" } } } }
+        "402": { $ref: "#/components/responses/Error" }
+
+  /api/v1/meta/categories:
+    get: { tags: [Meta], summary: Spending categories, security: [], responses: { "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Category" } } } } } } }
+  /api/v1/meta/skins:
+    get: { tags: [Meta], summary: App-icon skins, security: [], responses: { "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Skin" } } } } } } }
+  /api/v1/meta/plans:
+    get: { tags: [Meta], summary: Subscription tiers, security: [], responses: { "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/PlanOption" } } } } } } }
+  /api/v1/meta/perks:
+    get: { tags: [Meta], summary: Plus perks, security: [], responses: { "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/PlusPerk" } } } } } } }
+  /api/v1/meta/dimensions:
+    get:
+      tags: [Meta]
+      summary: The six reflective questions
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    key: { type: string }
+                    label: { type: string }
+                    q: { type: string }
+
+  /api/v1/analyze:
+    post:
+      tags: [Analyze]
+      summary: Analyse a purchase (creates a pending decision)
+      description: Free users are limited to AIConfig.free_daily_limit per day (402 when exceeded).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [item, price]
+              properties:
+                item: { type: string }
+                price: { type: integer }
+                cat: { type: string }
+                reason: { type: string }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Decision" } } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "402": { $ref: "#/components/responses/Error" }
+
+  /api/v1/decisions:
+    get:
+      tags: [Analyze]
+      summary: List the user's decisions
+      parameters:
+        - { name: filter, in: query, schema: { type: string, enum: [all, resist, buy, pending] } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Decision" } } } } }
+
+  /api/v1/decisions/{id}:
+    get:
+      tags: [Analyze]
+      summary: Get one decision
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Decision" } } } }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/v1/decisions/{id}/resolve:
+    post:
+      tags: [Analyze]
+      summary: Finalise a decision (resist credits savings, buy records spend)
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { action: { type: string, enum: [resist, buy] } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Decision" } } } }
+
+  /api/v1/wishlist:
+    get:
+      tags: [Wishlist]
+      summary: List cooling-off items
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/WishlistItem" } } } } }
+    post:
+      tags: [Wishlist]
+      summary: Park a purchase in cooling-off
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [item, price]
+              properties:
+                item: { type: string }
+                price: { type: integer }
+                cat: { type: string }
+                impulse: { type: integer }
+                decision_id: { type: string }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/WishlistItem" } } } }
+
+  /api/v1/wishlist/{id}/resolve:
+    post:
+      tags: [Wishlist]
+      summary: Resolve a cooling-off item
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { action: { type: string, enum: [resist, buy] } } }
+      responses:
+        "200": { description: OK }
+
+  /api/v1/wishlist/{id}:
+    delete:
+      tags: [Wishlist]
+      summary: Remove a cooling-off item
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200": { description: OK }
+
+  /api/v1/stats:
+    get:
+      tags: [Stats]
+      summary: Derived savings statistics
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Stats" } } } }
+
+  /api/v1/subscription:
+    get:
+      tags: [Subscription]
+      summary: Current entitlement + catalogue
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Subscription" } } } }
+
+  /api/v1/subscription/verify:
+    post:
+      tags: [Subscription]
+      summary: Verify a StoreKit 2 signed transaction (production purchase path)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [jws], properties: { jws: { type: string, description: StoreKit2 jwsRepresentation } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Subscription" } } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "501": { $ref: "#/components/responses/Error" }
+
+  /api/v1/subscription/subscribe:
+    post:
+      tags: [Subscription]
+      summary: Mock purchase (dev only; gated by LIM_ALLOW_MOCK_SUBSCRIBE)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { plan: { type: string, enum: [month, year] } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Subscription" } } } }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /api/v1/appstore/notifications:
+    post:
+      tags: [Subscription]
+      summary: App Store Server Notifications V2 webhook
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [signedPayload], properties: { signedPayload: { type: string } } }
+      responses:
+        "200": { description: Acknowledged }
+        "400": { $ref: "#/components/responses/Error" }
+
+  /api/v1/admin/overview:
+    get: { tags: [Admin], summary: Dashboard overview (KPIs, charts, recent feed), responses: { "200": { description: OK }, "403": { $ref: "#/components/responses/Error" } } }
+  /api/v1/admin/users:
+    get:
+      tags: [Admin]
+      summary: Paginated user list
+      parameters:
+        - { name: filter, in: query, schema: { type: string, enum: [all, plus, free, risk] } }
+        - { name: q, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, default: 25, maximum: 200 } }
+        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { type: object } }
+                  total: { type: integer }
+                  limit: { type: integer }
+                  offset: { type: integer }
+  /api/v1/admin/users/{id}:
+    get:
+      tags: [Admin]
+      summary: User detail (profile, stats, decisions)
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses: { "200": { description: OK }, "404": { $ref: "#/components/responses/Error" } }
+  /api/v1/admin/decisions:
+    get:
+      tags: [Admin]
+      summary: Paginated decision feed
+      parameters:
+        - { name: filter, in: query, schema: { type: string, enum: [all, resist, pause, buy] } }
+        - { name: limit, in: query, schema: { type: integer, default: 25, maximum: 200 } }
+        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+      responses: { "200": { description: OK } }
+  /api/v1/admin/subscriptions:
+    get: { tags: [Admin], summary: Revenue (MRR, plan split, transactions), responses: { "200": { description: OK } } }
+  /api/v1/admin/ai-config:
+    get: { tags: [Admin], summary: Get AI engine config, responses: { "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AIConfig" } } } } } }
+    put:
+      tags: [Admin]
+      summary: Update AI engine config (weights, persona, prompt, limits)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AIConfig" } } } }
+      responses: { "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AIConfig" } } } } }
+  /api/v1/admin/categories:
+    get: { tags: [Admin], summary: List categories, responses: { "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Category" } } } } } } }
+    put:
+      tags: [Admin]
+      summary: Replace category list
+      requestBody: { required: true, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Category" } } } } }
+      responses: { "200": { description: OK } }
+  /api/v1/admin/skins:
+    get: { tags: [Admin], summary: List skins, responses: { "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Skin" } } } } } } }
+  /api/v1/admin/push:
+    get: { tags: [Admin], summary: List push campaigns, responses: { "200": { description: OK } } }
+    post:
+      tags: [Admin]
+      summary: Create a push campaign
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                segment: { type: string }
+                status: { type: string, enum: [draft, scheduled, sent] }
+      responses: { "201": { description: Created } }
+
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema: { type: object, properties: { error: { type: string } } }
+  schemas:
+    Error:
+      type: object
+      properties: { error: { type: string } }
+    Profile:
+      type: object
+      properties:
+        monthly_income: { type: integer }
+        household_income: { type: integer }
+        members: { type: integer }
+        debt: { type: integer }
+        month_budget: { type: integer }
+    Dimensions:
+      type: object
+      properties:
+        need: { type: number }
+        alt: { type: number }
+        emo: { type: number }
+        value: { type: number }
+        money: { type: number }
+        env: { type: number }
+    User:
+      type: object
+      properties:
+        id: { type: string }
+        email: { type: string }
+        name: { type: string }
+        role: { type: string, enum: [user, admin] }
+        city: { type: string }
+        created_at: { type: string, format: date-time }
+        last_active_at: { type: string, format: date-time }
+        profile: { $ref: "#/components/schemas/Profile" }
+        plan: { type: string, enum: [free, month, year] }
+        plus_until: { type: string, format: date-time }
+        ai_used_today: { type: integer }
+        app_icon: { type: string }
+        onboarded: { type: boolean }
+    AuthResponse:
+      type: object
+      properties:
+        token: { type: string }
+        user: { $ref: "#/components/schemas/User" }
+    Decision:
+      type: object
+      properties:
+        id: { type: string }
+        user_id: { type: string }
+        item: { type: string }
+        price: { type: integer }
+        cat: { type: string }
+        reason: { type: string }
+        dims: { $ref: "#/components/schemas/Dimensions" }
+        impulse: { type: integer }
+        verdict: { type: string, enum: [buy, pause, resist] }
+        message: { type: string }
+        note: { type: string }
+        saved: { type: integer }
+        status: { type: string, enum: [pending, resisted, bought, wishlist] }
+        created_at: { type: string, format: date-time }
+        decided_at: { type: string, format: date-time }
+    WishlistItem:
+      type: object
+      properties:
+        id: { type: string }
+        user_id: { type: string }
+        decision_id: { type: string }
+        item: { type: string }
+        price: { type: integer }
+        cat: { type: string }
+        impulse: { type: integer }
+        added_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        progress: { type: number }
+        expired: { type: boolean }
+        remain_sec: { type: integer }
+    Stats:
+      type: object
+      properties:
+        month_saved: { type: integer }
+        month_spent: { type: integer }
+        total_saved: { type: integer }
+        total_spent: { type: integer }
+        resist_count: { type: integer }
+        buy_count: { type: integer }
+        streak: { type: integer }
+        tree_stage: { type: integer }
+        restraint_rate: { type: integer }
+        by_month:
+          type: array
+          items:
+            type: object
+            properties:
+              label: { type: string }
+              spent: { type: integer }
+              saved: { type: integer }
+        top_cats:
+          type: array
+          items:
+            type: object
+            properties:
+              cat: { type: string }
+              label: { type: string }
+              color: { type: string }
+              saved: { type: integer }
+    Category:
+      type: object
+      properties:
+        id: { type: string }
+        label: { type: string }
+        color: { type: string }
+        soft: { type: string }
+        icon: { type: string }
+        free: { type: boolean }
+        count: { type: integer }
+    Skin:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        bg: { type: string }
+        dark: { type: boolean }
+        free: { type: boolean }
+        used: { type: string }
+    PlanOption:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        price: { type: integer }
+        per: { type: string }
+        note: { type: string }
+        best: { type: boolean }
+    PlusPerk:
+      type: object
+      properties:
+        icon: { type: string }
+        title: { type: string }
+        desc: { type: string }
+    Subscription:
+      type: object
+      properties:
+        plan: { type: string, enum: [free, month, year] }
+        is_plus: { type: boolean }
+        plus_until: { type: string, format: date-time }
+        plans: { type: array, items: { $ref: "#/components/schemas/PlanOption" } }
+        perks: { type: array, items: { $ref: "#/components/schemas/PlusPerk" } }
+    AIConfig:
+      type: object
+      properties:
+        dims:
+          type: array
+          items:
+            type: object
+            properties:
+              key: { type: string }
+              label: { type: string }
+              desc: { type: string }
+              weight: { type: number }
+              enabled: { type: boolean }
+              q: { type: string }
+        prompt_template: { type: string }
+        persona: { type: string }
+        model: { type: string }
+        free_daily_limit: { type: integer }
+        cooling_hours: { type: integer }
+        updated_at: { type: string, format: date-time }

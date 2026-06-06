@@ -4,6 +4,9 @@ The LIM backend exposes one REST API that serves **both** the consumer iOS app
 and the admin dashboard. This is the complete reference, derived directly from
 `internal/httpapi/router.go` (the source of truth) and the handler structs.
 
+* **Machine-readable spec:** an OpenAPI 3.0 document is served at
+  **`GET /openapi.yaml`** with an interactive **Swagger UI at `/docs`** (source:
+  `backend/internal/httpapi/openapi.yaml`). Import it into Postman / generate clients.
 * **Base URL:** `http://localhost:8080` in development; your host in production.
 * **API prefix:** all application routes live under `/api/v1`. Health is at the root.
 * **Content type:** request and response bodies are JSON (`application/json; charset=utf-8`).
