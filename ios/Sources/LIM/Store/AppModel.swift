@@ -44,6 +44,7 @@ final class AppModel: ObservableObject {
     @Published var user: User?
     @Published var booting = true
     @Published var authError: String?
+    @Published var banner: String?   // transient network/error notice
 
     // Navigation
     @Published var stack: [Screen] = [.home]
@@ -132,6 +133,7 @@ final class AppModel: ObservableObject {
     func signOut() async {
         UserDefaults.standard.removeObject(forKey: tokenKey)
         await api.setToken(nil)
+        await ResponseCache.shared.clear()
         user = nil
         stack = [.home]
     }
@@ -148,12 +150,19 @@ final class AppModel: ObservableObject {
     }
 
     func refreshAll() async {
-        async let st = api.stats()
-        async let de = api.decisions()
-        async let wl = api.wishlist()
-        if let st = try? await st { stats = st }
-        if let de = try? await de { decisions = de }
-        if let wl = try? await wl { wishlist = wl }
+        do {
+            async let st = api.stats()
+            async let de = api.decisions()
+            async let wl = api.wishlist()
+            // GETs fall back to the on-disk cache offline, so these usually
+            // succeed; a throw here means a hard failure with no cached copy.
+            stats = try await st
+            decisions = try await de
+            wishlist = try await wl
+            banner = nil
+        } catch {
+            banner = "网络连接不稳定，部分数据可能未更新"
+        }
     }
 
     func refreshUser() async { if let me = try? await api.me() { user = me } }

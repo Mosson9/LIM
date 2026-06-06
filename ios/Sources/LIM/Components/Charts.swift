@@ -38,6 +38,8 @@ struct ImpulseDial: View {
             }
         }
         .frame(width: size, height: size * 0.82)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("冲动指数 \(Int(value.rounded()))，\(tip)")
     }
 }
 
@@ -113,6 +115,8 @@ struct RadarChart: View {
             }
         }
         .frame(width: size, height: size)
+        .accessibilityElement()
+        .accessibilityLabel("六维分析雷达图")
     }
 }
 
@@ -161,6 +165,7 @@ struct GrowthTree: View {
             }
         }
         .frame(width: size, height: size)
+        .accessibilityHidden(true) // decorative
     }
 
     private func leafShape(_ ctx: inout GraphicsContext, at p: CGPoint, flip: Bool) {
@@ -196,6 +201,7 @@ struct MiniBars: View {
             }
         }
         .frame(height: height)
+        .accessibilityHidden(true) // values are also shown as text
     }
 
     private func bar(_ value: Int, color: Color) -> some View {

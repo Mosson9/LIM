@@ -35,12 +35,7 @@ struct WishlistView: View {
     }
 
     private var empty: some View {
-        VStack(spacing: 6) {
-            Icon(name: "leaf", size: 40, color: Theme.ink4).padding(.bottom, 8)
-            Text("心愿单空空的").font(Theme.sans(15)).foregroundColor(Theme.ink3)
-            Text("这是一种很轻盈的状态。").font(Theme.sans(13)).foregroundColor(Theme.ink4)
-        }
-        .frame(maxWidth: .infinity).padding(.vertical, 60)
+        EmptyStateView(icon: "leaf", title: "心愿单空空的", subtitle: "这是一种很轻盈的状态。")
     }
 
     private func card(_ w: WishlistItem) -> some View {

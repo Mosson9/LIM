@@ -54,6 +54,10 @@ struct HistoryView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
 
                     // timeline
+                    if list.isEmpty {
+                        EmptyStateView(icon: "clock", title: "还没有决定",
+                                       subtitle: "点底部 ✦ 问问 LIM，记录第一次克制")
+                    }
                     ForEach(list) { d in historyCard(d) }
                     Color.clear.frame(height: 110)
                 }

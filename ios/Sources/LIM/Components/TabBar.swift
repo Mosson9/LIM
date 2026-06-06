@@ -48,5 +48,6 @@ struct TabBar: View {
         }
         .frame(maxWidth: .infinity)
         .offset(y: -10)
+        .accessibilityLabel("问问 LIM，该不该买")
     }
 }

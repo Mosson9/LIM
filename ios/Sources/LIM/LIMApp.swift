@@ -65,8 +65,15 @@ struct AppShell: View {
             if model.top.tab != nil {
                 TabBar(active: model.top.tab!) { model.selectTab($0) }
             }
+
+            if let banner = model.banner {
+                Banner(text: banner) { withAnimation { model.banner = nil } }
+                    .padding(.top, 8)
+                    .frame(maxHeight: .infinity, alignment: .top)
+            }
         }
         .animation(.easeInOut(duration: 0.28), value: screenID(model.top))
+        .animation(.easeInOut(duration: 0.25), value: model.banner)
     }
 
     @ViewBuilder

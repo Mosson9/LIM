@@ -60,14 +60,47 @@ actor APIClient {
         if authed, let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         if let body { req.httpBody = try Self.encoder.encode(AnyEncodable(body)) }
 
-        let (data, resp) = try await session.data(for: req)
-        guard let http = resp as? HTTPURLResponse else { throw URLError(.badServerResponse) }
-        guard (200..<300).contains(http.statusCode) else {
-            if let apiErr = try? Self.decoder.decode(APIError.self, from: data) { throw apiErr }
-            throw APIError(error: "请求失败 (\(http.statusCode))")
+        // GETs are safe to retry (transient network / 5xx) and to cache for
+        // offline fallback. Mutations are sent exactly once.
+        let isGET = method == "GET"
+        let cacheKey = isGET ? path : ""
+        let maxAttempts = isGET ? 3 : 1
+        var lastError: Error = APIError(error: "请求失败")
+
+        for attempt in 0..<maxAttempts {
+            do {
+                let (data, resp) = try await session.data(for: req)
+                guard let http = resp as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+                if !(200..<300).contains(http.statusCode) {
+                    // Retry transient server errors on GET; otherwise surface.
+                    if isGET, http.statusCode >= 500, attempt < maxAttempts - 1 {
+                        try? await Task.sleep(nanoseconds: backoff(attempt))
+                        continue
+                    }
+                    if let apiErr = try? Self.decoder.decode(APIError.self, from: data) { throw apiErr }
+                    throw APIError(error: "请求失败 (\(http.statusCode))")
+                }
+                if isGET { await ResponseCache.shared.set(cacheKey, data) }
+                if T.self == EmptyResponse.self { return EmptyResponse() as! T }
+                return try Self.decoder.decode(T.self, from: data)
+            } catch let apiErr as APIError {
+                throw apiErr // server-side error envelope — don't retry/fall back
+            } catch {
+                lastError = error
+                if isGET, attempt < maxAttempts - 1 {
+                    try? await Task.sleep(nanoseconds: backoff(attempt))
+                    continue
+                }
+                // Final transport failure on a GET → serve last-known cached data.
+                if isGET, let cached = await ResponseCache.shared.get(cacheKey),
+                   T.self != EmptyResponse.self,
+                   let decoded = try? Self.decoder.decode(T.self, from: cached) {
+                    return decoded
+                }
+                throw lastError
+            }
         }
-        if T.self == EmptyResponse.self { return EmptyResponse() as! T }
-        return try Self.decoder.decode(T.self, from: data)
+        throw lastError
     }
 
     // MARK: - Auth
@@ -165,6 +198,11 @@ actor APIClient {
 }
 
 // MARK: - Encoding helpers
+
+/// Exponential backoff (0.3s, 0.6s, 1.2s …) in nanoseconds for GET retries.
+private func backoff(_ attempt: Int) -> UInt64 {
+    UInt64(0.3 * pow(2.0, Double(attempt)) * 1_000_000_000)
+}
 
 /// Marker for endpoints that return no useful body.
 struct EmptyResponse: Decodable {}

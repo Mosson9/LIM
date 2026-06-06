@@ -46,6 +46,7 @@ struct TopBar<Trailing: View>: View {
             Icon(name: icon, size: 22, color: Theme.ink)
                 .frame(width: 38, height: 38)
         }
+        .accessibilityLabel(icon == "close" ? "关闭" : "返回")
     }
 }
 
