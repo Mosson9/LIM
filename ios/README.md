@@ -64,6 +64,19 @@ ios/
     └── Screens/                # 14 screens (onboarding → result → growth …)
 ```
 
+## Tests
+
+Unit tests live in `Tests/LIMTests` and cover the pure, network-free logic:
+JSON model decoding (matching the backend's snake_case + ISO8601), entitlement
+and verdict computed properties, currency formatting, dimension ordering, the
+navigation stack, and the StoreKit plan→product mapping.
+
+```bash
+xcodegen generate
+xcodebuild test -scheme LIM -destination 'platform=iOS Simulator,name=iPhone 15'
+# or just press ⌘U in Xcode
+```
+
 ## Subscriptions (StoreKit 2)
 
 LIM Plus uses **StoreKit 2** with **server-side receipt verification**:

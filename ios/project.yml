@@ -31,3 +31,33 @@ targets:
         ENABLE_PREVIEWS: "YES"
         TARGETED_DEVICE_FAMILY: "1"
         IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+
+  LIMTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests/LIMTests
+    dependencies:
+      - target: LIM
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.lim.ios.tests
+        GENERATE_INFOPLIST_FILE: "YES"
+
+schemes:
+  LIM:
+    build:
+      targets:
+        LIM: all
+        LIMTests: [test]
+    run:
+      config: Debug
+      # Local StoreKit testing — purchases work in the simulator with no
+      # App Store Connect setup. (Requires XcodeGen ≥ 2.25; remove if unsupported
+      # and select the config manually in Edit Scheme → Run → Options.)
+      storeKitConfiguration: Products.storekit
+    test:
+      config: Debug
+      gatherCoverageData: true
+      targets:
+        - LIMTests

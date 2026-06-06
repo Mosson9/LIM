@@ -29,8 +29,7 @@ actor APIClient {
         d.dateDecodingStrategy = .custom { dec in
             let c = try dec.singleValueContainer()
             let s = try c.decode(String.self)
-            if let date = ISO8601DateFormatter.lim.date(from: s) { return date }
-            if let date = ISO8601DateFormatter.limPlain.date(from: s) { return date }
+            if let date = LIMDate.parse(s) { return date }
             throw DecodingError.dataCorruptedError(in: c, debugDescription: "bad date: \(s)")
         }
         return d
@@ -189,4 +188,21 @@ extension ISO8601DateFormatter {
         f.formatOptions = [.withInternetDateTime]
         return f
     }()
+}
+
+/// Robust RFC3339 / ISO8601 date parsing.
+///
+/// The Go backend marshals `time.Time` as RFC3339Nano, so timestamps can carry
+/// up to 9 fractional digits (e.g. `2026-06-06T03:59:00.416404297Z`).
+/// `ISO8601DateFormatter` only reliably handles 3 fractional digits, so we try
+/// the fractional and plain formatters and, failing both, strip the fractional
+/// component (sub-second precision isn't needed here) and retry.
+enum LIMDate {
+    static func parse(_ s: String) -> Date? {
+        if let d = ISO8601DateFormatter.lim.date(from: s) { return d }
+        if let d = ISO8601DateFormatter.limPlain.date(from: s) { return d }
+        let stripped = s.replacingOccurrences(
+            of: #"\.\d+"#, with: "", options: .regularExpression)
+        return ISO8601DateFormatter.limPlain.date(from: stripped)
+    }
 }
