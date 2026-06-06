@@ -253,6 +253,17 @@
       h("div", null, h("div.kicker", null, kicker), h("h1.page-title", null, title), h("div.page-sub", null, sub)),
       actions ? h("div.row", { style: "gap:10px" }, actions) : null);
   }
+  // Prev/Next pager. onNav(newOffset) re-renders the page at the new offset.
+  function pager(total, offset, limit, onNav) {
+    const from = total ? offset + 1 : 0, to = Math.min(offset + limit, total);
+    const btn = (label, target, disabled) =>
+      h("button.btn.btn-ghost.btn-sm", disabled ? { disabled: "" } : { onclick: () => onNav(target) }, label);
+    return h("div.row.between", { style: "padding:14px 6px;font-size:12.5px" },
+      h("span.faint", null, `${from}–${to} / ${fmt(total)}`),
+      h("div.row", { style: "gap:8px" },
+        btn("上一页", Math.max(0, offset - limit), offset <= 0),
+        btn("下一页", offset + limit, to >= total)));
+  }
   function kpiCard(k) {
     return h("div.card", null,
       h("div.kpi-label", null, k.label),
@@ -347,18 +358,20 @@
   // ============================================================
   //  DECISIONS
   // ============================================================
-  let decFilter = "all";
+  let decFilter = "all", decOffset = 0;
+  const DEC_LIMIT = 25;
   async function pageDecisions(page) {
-    const d = await api("GET", "/api/v1/admin/decisions?filter=" + decFilter);
+    const d = await api("GET", `/api/v1/admin/decisions?filter=${decFilter}&limit=${DEC_LIMIT}&offset=${decOffset}`);
     const seg = h("div.seg", null, [["all", "全部"], ["resist", "建议不买"], ["pause", "冷静一下"], ["buy", "建议买入"]].map(([k, l]) =>
-      h("button", { class: decFilter === k ? "on" : "", onclick: () => { decFilter = k; go("decisions"); } }, l)));
+      h("button", { class: decFilter === k ? "on" : "", onclick: () => { decFilter = k; decOffset = 0; go("decisions"); } }, l)));
     page.appendChild(pageHead("AI 决策 · Decisions", "AI 决策记录", "每一次「买 / 不买」背后的六维分析", seg));
     page.appendChild(h("div.grid", { style: "grid-template-columns:repeat(4,1fr);margin-bottom:18px" },
       kpiCard({ label: "决策总数", val: fmt(d.count), sub: "当前筛选" }),
       kpiCard({ label: "平均冲动指数", val: d.avg_impulse, sub: "越高越该克制" }),
       kpiCard({ label: "今日帮省下", val: yuan(d.saved_today), sub: "克制金额" }),
-      kpiCard({ label: "不买率", val: pctOf(d.decisions, x => x.verdict === "resist"), sub: "建议不买占比" })));
+      kpiCard({ label: "不买率", val: d.resist_rate + "%", sub: "建议不买占比" })));
     page.appendChild(h("div.card-pad0", null, decisionTable(d.decisions, true)));
+    page.appendChild(pager(d.total, d.offset, d.limit, off => { decOffset = off; go("decisions"); }));
   }
   function pctOf(list, pred) {
     if (!list.length) return "0%";
@@ -403,15 +416,17 @@
   // ============================================================
   //  USERS
   // ============================================================
-  let userFilter = "all", userQuery = "";
+  let userFilter = "all", userQuery = "", userOffset = 0;
+  const USER_LIMIT = 25;
   async function pageUsers(page) {
-    const list = await api("GET", "/api/v1/admin/users?filter=" + userFilter + "&q=" + encodeURIComponent(userQuery));
-    page.appendChild(pageHead("用户 · Users", "用户管理", "共 " + list.length + " 名用户（当前筛选）",
+    const res = await api("GET", `/api/v1/admin/users?filter=${userFilter}&q=${encodeURIComponent(userQuery)}&limit=${USER_LIMIT}&offset=${userOffset}`);
+    const list = res.items || [];
+    page.appendChild(pageHead("用户 · Users", "用户管理", "共 " + fmt(res.total) + " 名用户（当前筛选）",
       h("button.btn.btn-ghost.btn-sm", null, icon("download", 15), "导出 CSV")));
     const searchInput = h("input", { placeholder: "搜索姓名 / ID / 城市", value: userQuery });
-    searchInput.addEventListener("keydown", e => { if (e.key === "Enter") { userQuery = searchInput.value; go("users"); } });
+    searchInput.addEventListener("keydown", e => { if (e.key === "Enter") { userQuery = searchInput.value; userOffset = 0; go("users"); } });
     const seg = h("div.seg", null, [["all", "全部"], ["plus", "付费"], ["free", "免费"], ["risk", "流失风险"]].map(([k, l]) =>
-      h("button", { class: userFilter === k ? "on" : "", onclick: () => { userFilter = k; go("users"); } }, l)));
+      h("button", { class: userFilter === k ? "on" : "", onclick: () => { userFilter = k; userOffset = 0; go("users"); } }, l)));
     page.appendChild(h("div.card-pad0", null,
       h("div.row.between", { style: "padding:16px 18px;border-bottom:1px solid var(--hairline);gap:14px" },
         h("div.search", { style: "width:300px" }, icon("search", 16, "#9C9A92"), searchInput), seg),
@@ -430,6 +445,7 @@
             h("td", null, h("span.row", { style: "gap:7px" }, h("span.pill-dot", { style: "background:" + sm.d }), sm.l)),
             h("td.faint", null, u.last_seen));
         })))));
+    page.appendChild(pager(res.total, res.offset, res.limit, off => { userOffset = off; go("users"); }));
   }
   async function userDrawer(id) {
     const close = () => { mask.remove(); drawer.remove(); };

@@ -4,11 +4,43 @@ import (
 	"math"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/mosson9/lim/backend/internal/models"
 )
+
+// pageParams reads ?limit & ?offset (limit clamped to [1,200]).
+func pageParams(r *http.Request, defLimit int) (limit, offset int) {
+	limit, offset = defLimit, 0
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	if v := r.URL.Query().Get("offset"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			offset = n
+		}
+	}
+	return
+}
+
+// pageSlice returns items[offset:offset+limit] safely.
+func pageSlice[T any](items []T, limit, offset int) []T {
+	if offset >= len(items) {
+		return []T{}
+	}
+	end := offset + limit
+	if end > len(items) {
+		end = len(items)
+	}
+	return items[offset:end]
+}
 
 // ---- helpers shared across admin endpoints ----
 
@@ -196,7 +228,13 @@ func (a *App) handleAdminUsers(w http.ResponseWriter, r *http.Request) {
 			Saved: saved, Resist: resist, LastSeen: humanizeSince(u.LastActiveAt, now),
 		})
 	}
-	writeJSON(w, http.StatusOK, out)
+	limit, offset := pageParams(r, 25)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"items":  pageSlice(out, limit, offset),
+		"total":  len(out),
+		"limit":  limit,
+		"offset": offset,
+	})
 }
 
 func (a *App) handleAdminUser(w http.ResponseWriter, r *http.Request) {
@@ -230,14 +268,26 @@ func (a *App) handleAdminDecisions(w http.ResponseWriter, r *http.Request) {
 			savedToday += d.Saved
 		}
 	}
-	avgImpulse := 0
+	avgImpulse, resistRate := 0, 0
 	if len(out) > 0 {
+		resist := 0
+		for _, d := range out {
+			if d.Verdict == models.VerdictResist {
+				resist++
+			}
+		}
 		avgImpulse = totalImpulse / len(out)
+		resistRate = resist * 100 / len(out)
 	}
+	limit, offset := pageParams(r, 25)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"decisions":   out,
-		"count":       len(out),
-		"avg_impulse": avgImpulse,
+		"decisions":   pageSlice(out, limit, offset), // current page
+		"count":       len(out),                      // total matching (all pages)
+		"total":       len(out),
+		"limit":       limit,
+		"offset":      offset,
+		"avg_impulse": avgImpulse,  // over the full filtered set
+		"resist_rate": resistRate,  // % "建议不买" over the full filtered set
 		"saved_today": savedToday,
 	})
 }
