@@ -64,6 +64,16 @@ ios/
     └── Screens/                # 14 screens (onboarding → result → growth …)
 ```
 
+## Localization (多语言)
+
+The app ships **zh-Hans** (development language) and **en** string tables in
+`Resources/{zh-Hans,en}.lproj/Localizable.strings`, with a `L("key")` helper
+(`Theme/Localization.swift`). The entry flow (tab bar, onboarding, common
+buttons) is localized as the reference pattern; to localize another string,
+replace the literal with `L("some.key")` and add the key to **both** tables. The
+device language selects the table automatically; `CFBundleLocalizations` lists
+the supported languages.
+
 ## Tests
 
 Unit tests live in `Tests/LIMTests` and cover the pure, network-free logic:

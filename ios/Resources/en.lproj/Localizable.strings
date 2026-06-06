@@ -1,0 +1,27 @@
+/* Common */
+"common.done" = "Done";
+"common.continue" = "Continue";
+"common.next" = "Next";
+"common.skip" = "Skip";
+"common.start" = "Get started";
+"common.back" = "Back";
+"common.close" = "Close";
+"common.backHome" = "Back to home";
+
+/* Tab bar */
+"tab.home" = "Home";
+"tab.growth" = "Growth";
+"tab.history" = "History";
+"tab.me" = "Me";
+"tab.ask" = "Ask LIM if you should buy it";
+
+/* Onboarding */
+"onboarding.s1.kicker" = "LESS IS MORE";
+"onboarding.s1.title" = "Before you buy,\nask yourself.";
+"onboarding.s1.body" = "We're surrounded by too many wants. LIM sells nothing — it just pauses with you the moment you're tempted.";
+"onboarding.s2.kicker" = "SIX ANGLES";
+"onboarding.s2.title" = "No judgment —\njust clarity, together.";
+"onboarding.s2.body" = "Need, alternatives, emotion, long-term value, economics, environment — six angles to see a craving clearly.";
+"onboarding.s3.kicker" = "VISIBLE RESTRAINT";
+"onboarding.s3.title" = "Every time you resist\nadds up for you.";
+"onboarding.s3.body" = "What you don't buy becomes real money saved and a slowly growing tree. Less is more.";

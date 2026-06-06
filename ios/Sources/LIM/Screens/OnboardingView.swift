@@ -7,17 +7,16 @@ struct OnboardingView: View {
     @State private var index = 0
 
     private struct Slide { let kicker, body, art: String; let title: String }
-    private let slides = [
-        Slide(kicker: "LESS IS MORE",
-              body: "我们被太多「想要」包围。LIM 不卖东西，只在你心动的那一刻，陪你停下来想一想。",
-              art: "leaf", title: "买之前，\n先问问自己。"),
-        Slide(kicker: "六个角度",
-              body: "从需求、替代、情感、长期价值、经济到环境——LIM 用六个角度，帮你看清这次心动的真相。",
-              art: "target", title: "不评判，\n只是一起想清楚。"),
-        Slide(kicker: "看得见的克制",
-              body: "没买下的东西，会变成实实在在省下的钱，和一棵慢慢长大的树。少即是多。",
-              art: "sprout", title: "每一次忍住，\n都在为你积攒。"),
-    ]
+    private var slides: [Slide] {
+        [
+            Slide(kicker: L("onboarding.s1.kicker"), body: L("onboarding.s1.body"),
+                  art: "leaf", title: L("onboarding.s1.title")),
+            Slide(kicker: L("onboarding.s2.kicker"), body: L("onboarding.s2.body"),
+                  art: "target", title: L("onboarding.s2.title")),
+            Slide(kicker: L("onboarding.s3.kicker"), body: L("onboarding.s3.body"),
+                  art: "sprout", title: L("onboarding.s3.title")),
+        ]
+    }
 
     var body: some View {
         let s = slides[index]
@@ -27,7 +26,7 @@ struct OnboardingView: View {
                 Kicker(text: "LIM", color: Theme.indigo)
                 Spacer()
                 if !last {
-                    Button("跳过") { model.go(.profileSetup) }
+                    Button(L("common.skip")) { model.go(.profileSetup) }
                         .font(Theme.sans(13)).foregroundColor(Theme.ink2)
                 }
             }
@@ -65,7 +64,7 @@ struct OnboardingView: View {
             }
             .padding(.bottom, 26)
 
-            Button(last ? "开始吧" : "下一步") {
+            Button(last ? L("common.start") : L("common.next")) {
                 if last { model.go(.profileSetup) }
                 else { withAnimation { index += 1 } }
             }

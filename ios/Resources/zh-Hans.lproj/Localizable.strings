@@ -1,0 +1,27 @@
+/* Common */
+"common.done" = "完成";
+"common.continue" = "继续";
+"common.next" = "下一步";
+"common.skip" = "跳过";
+"common.start" = "开始吧";
+"common.back" = "返回";
+"common.close" = "关闭";
+"common.backHome" = "回到首页";
+
+/* Tab bar */
+"tab.home" = "首页";
+"tab.growth" = "成长";
+"tab.history" = "历史";
+"tab.me" = "我的";
+"tab.ask" = "问问 LIM，该不该买";
+
+/* Onboarding */
+"onboarding.s1.kicker" = "LESS IS MORE";
+"onboarding.s1.title" = "买之前，\n先问问自己。";
+"onboarding.s1.body" = "我们被太多「想要」包围。LIM 不卖东西，只在你心动的那一刻，陪你停下来想一想。";
+"onboarding.s2.kicker" = "六个角度";
+"onboarding.s2.title" = "不评判，\n只是一起想清楚。";
+"onboarding.s2.body" = "从需求、替代、情感、长期价值、经济到环境——LIM 用六个角度，帮你看清这次心动的真相。";
+"onboarding.s3.kicker" = "看得见的克制";
+"onboarding.s3.title" = "每一次忍住，\n都在为你积攒。";
+"onboarding.s3.body" = "没买下的东西，会变成实实在在省下的钱，和一棵慢慢长大的树。少即是多。";

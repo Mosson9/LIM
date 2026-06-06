@@ -22,6 +22,8 @@ targets:
     sources:
       - path: Sources
       - path: Resources/Assets.xcassets
+      - path: Resources/zh-Hans.lproj
+      - path: Resources/en.lproj
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.lim.ios

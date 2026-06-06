@@ -8,11 +8,11 @@ struct TabBar: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            item(.home, "home", "首页")
-            item(.growth, "sprout", "成长")
+            item(.home, "home", L("tab.home"))
+            item(.growth, "sprout", L("tab.growth"))
             fab
-            item(.history, "clock", "历史")
-            item(.me, "user", "我的")
+            item(.history, "clock", L("tab.history"))
+            item(.me, "user", L("tab.me"))
         }
         .padding(.horizontal, 8)
         .padding(.top, 8)
@@ -48,6 +48,6 @@ struct TabBar: View {
         }
         .frame(maxWidth: .infinity)
         .offset(y: -10)
-        .accessibilityLabel("问问 LIM，该不该买")
+        .accessibilityLabel(L("tab.ask"))
     }
 }
