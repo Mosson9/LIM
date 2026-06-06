@@ -13,9 +13,11 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -39,6 +41,8 @@ func main() {
 		runHealthcheck(cfg.Addr)
 		return
 	}
+
+	setupLogging(cfg.LogFormat, cfg.LogLevel)
 
 	st, err := store.Open(cfg.DatabaseURL, cfg.DataFile)
 	if err != nil {
@@ -90,7 +94,8 @@ func main() {
 		if cfg.DatabaseURL != "" {
 			storeKind = "postgres"
 		}
-		log.Printf("LIM API listening on %s · store=%s · ai=%s", cfg.Addr, storeKind, mode)
+		slog.Info("listening", "addr", cfg.Addr, "store", storeKind, "ai", mode,
+			"mock_subscribe", cfg.AllowMockSubscribe)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("server: %v", err)
 		}
@@ -106,6 +111,27 @@ func main() {
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Printf("shutdown: %v", err)
 	}
+}
+
+// setupLogging installs a structured slog logger as the default.
+func setupLogging(format, level string) {
+	var lvl slog.Level
+	switch strings.ToLower(level) {
+	case "debug":
+		lvl = slog.LevelDebug
+	case "warn":
+		lvl = slog.LevelWarn
+	case "error":
+		lvl = slog.LevelError
+	default:
+		lvl = slog.LevelInfo
+	}
+	opts := &slog.HandlerOptions{Level: lvl}
+	var h slog.Handler = slog.NewTextHandler(os.Stderr, opts)
+	if strings.ToLower(format) == "json" {
+		h = slog.NewJSONHandler(os.Stderr, opts)
+	}
+	slog.SetDefault(slog.New(h))
 }
 
 // runHealthcheck probes /healthz on the configured address and exits non-zero on

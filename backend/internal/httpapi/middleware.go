@@ -2,7 +2,9 @@ package httpapi
 
 import (
 	"context"
-	"log"
+	"crypto/rand"
+	"encoding/hex"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -13,7 +15,10 @@ import (
 
 type ctxKey string
 
-const userCtxKey ctxKey = "user"
+const (
+	userCtxKey      ctxKey = "user"
+	requestIDCtxKey ctxKey = "request_id"
+)
 
 // withCORS adds permissive CORS headers for the admin web app and handles
 // preflight requests.
@@ -31,24 +36,57 @@ func (a *App) withCORS(next http.Handler) http.Handler {
 	})
 }
 
-// logging logs each request with its status and latency.
+// requestID assigns a short id to each request, exposes it as X-Request-Id, and
+// stores it on the context for structured logs.
+func requestID(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id := r.Header.Get("X-Request-Id")
+		if id == "" {
+			var b [8]byte
+			_, _ = rand.Read(b[:])
+			id = hex.EncodeToString(b[:])
+		}
+		w.Header().Set("X-Request-Id", id)
+		ctx := context.WithValue(r.Context(), requestIDCtxKey, id)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// logging emits one structured log line per request (method, path, status,
+// latency, client IP, request id).
 func logging(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		sr := &statusRecorder{ResponseWriter: w, status: 200}
 		next.ServeHTTP(sr, r)
-		log.Printf("%s %s %d %s", r.Method, r.URL.Path, sr.status, time.Since(start).Round(time.Millisecond))
+		rid, _ := r.Context().Value(requestIDCtxKey).(string)
+		slog.Info("http_request",
+			"method", r.Method,
+			"path", r.URL.Path,
+			"status", sr.status,
+			"bytes", sr.bytes,
+			"dur_ms", time.Since(start).Milliseconds(),
+			"ip", clientIP(r),
+			"request_id", rid,
+		)
 	})
 }
 
 type statusRecorder struct {
 	http.ResponseWriter
 	status int
+	bytes  int
 }
 
 func (s *statusRecorder) WriteHeader(code int) {
 	s.status = code
 	s.ResponseWriter.WriteHeader(code)
+}
+
+func (s *statusRecorder) Write(b []byte) (int, error) {
+	n, err := s.ResponseWriter.Write(b)
+	s.bytes += n
+	return n, err
 }
 
 // authenticate is middleware that requires a valid bearer token and injects the

@@ -1,7 +1,7 @@
 package httpapi
 
 import (
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"runtime/debug"
@@ -18,7 +18,10 @@ func recoverMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if rec := recover(); rec != nil {
-				log.Printf("panic: %v\n%s", rec, debug.Stack())
+				rid, _ := r.Context().Value(requestIDCtxKey).(string)
+				slog.Error("panic",
+					"err", rec, "path", r.URL.Path, "request_id", rid,
+					"stack", string(debug.Stack()))
 				writeError(w, http.StatusInternalServerError, "服务器内部错误")
 			}
 		}()

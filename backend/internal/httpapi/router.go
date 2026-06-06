@@ -136,6 +136,7 @@ func (a *App) Handler() http.Handler {
 	h = logging(h)
 	h = a.withCORS(h)
 	h = securityHeaders(h)
+	h = requestID(h)
 	h = recoverMiddleware(h)
 	return h
 }
