@@ -1,17 +1,19 @@
 # App Store screenshots · 应用市场图
 
-Five marketing screenshots for submitting **LIM** to the App Store, generated
-from [`generate.py`](generate.py) (SVG → PNG via cairosvg, CJK via WenQuanYi).
+Five marketing screenshots for submitting **LIM** to the App Store, in
+**zh-Hans and en**, generated from [`generate.py`](generate.py) (SVG → PNG via
+cairosvg; CJK via WenQuanYi, Latin headlines in serif).
 
-| # | File | Story |
-|---|------|-------|
-| 1 | `appstore_1.png` | 反消费主义 AI 伙伴 — 买之前先问问自己（首页/本月已省下） |
-| 2 | `appstore_2.png` | 六维分析 — AI 从六个角度看清这次心动（冲动指数 + 雷达） |
-| 3 | `appstore_3.png` | 省下的每一笔都长成一棵树（成长/累计省下） |
-| 4 | `appstore_4.png` | 24 小时冷静期 — 心动时先放进心愿单 |
-| 5 | `appstore_5.png` | LIM Plus — 解锁无限次 AI 咨询 |
+| # | zh-Hans | en | Story |
+|---|---------|----|-------|
+| 1 | `appstore_1.png` | `appstore_en_1.png` | 买之前先问问自己 / Before you buy, ask yourself（首页·已省下） |
+| 2 | `appstore_2.png` | `appstore_en_2.png` | 六维分析 / Six angles（冲动指数 + 雷达） |
+| 3 | `appstore_3.png` | `appstore_en_3.png` | 省下的每一笔都长成一棵树 / grows into a tree |
+| 4 | `appstore_4.png` | `appstore_en_4.png` | 24 小时冷静期 / Park it and sleep on it |
+| 5 | `appstore_5.png` | `appstore_en_5.png` | LIM Plus — 无限次咨询 / Unlimited AI |
 
-`contact_sheet.png` is a combined preview of all five.
+`contact_sheet.png` / `contact_sheet_en.png` are combined previews. App Store
+Connect lets you upload a localized screenshot set per language.
 
 ## Specs
 
