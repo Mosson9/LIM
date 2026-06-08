@@ -1,0 +1,11 @@
+{
+  "APP_NAME": "LIM · Less is More",
+  "COMPANY": "LIM",
+  "CONTACT_EMAIL": "privacy@lim.app",
+  "SUPPORT_EMAIL": "support@lim.app",
+  "EFFECTIVE_DATE": "2026-06-08",
+  "JURISDICTION": "the People's Republic of China",
+  "WEBSITE": "https://lim.app",
+  "PRIVACY_URL": "./privacy.html",
+  "LLM_PROVIDER": "Anthropic (Claude)"
+}
