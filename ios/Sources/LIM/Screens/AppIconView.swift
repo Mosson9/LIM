@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// 更换 App 图标 — free skins plus Plus-locked ones. Applying a free skin calls
 /// PUT /me/app-icon; locked skins route to the paywall.
@@ -79,11 +80,21 @@ struct AppIconView: View {
         .buttonStyle(.plain)
     }
 
+    /// Maps a skin id to its bundled alternate-icon asset name (classic = the
+    /// primary icon, i.e. nil). The sets are in Assets.xcassets (AppIcon-*).
+    private func alternateName(for id: String) -> String? {
+        id == "classic" ? nil : "AppIcon-\(id.prefix(1).uppercased() + id.dropFirst())"
+    }
+
     private func apply() async {
         working = true
         defer { working = false }
         guard let ic = selected else { return }
         if !ic.free && !(model.user?.isPlus ?? false) { model.go(.plus); return }
+        // Swap the actual home-screen icon (no-op on simulators that don't support it).
+        if UIApplication.shared.supportsAlternateIcons {
+            try? await UIApplication.shared.setAlternateIconName(alternateName(for: ic.id))
+        }
         if let updated = try? await APIClient.shared.setAppIcon(ic.id) {
             model.user = updated
         }
