@@ -417,14 +417,15 @@ SHOTS = [
 ]
 
 
-def generate(lang_idx, suffix):
-    global LANG, BODY_FONT, HEAD_FONT
+def generate(lang_idx, lang_suffix, width, height, size_suffix):
+    global LANG, BODY_FONT, HEAD_FONT, W, H
     LANG = lang_idx
+    W, H = width, height
     BODY_FONT = CJK if lang_idx == 0 else SANS
     HEAD_FONT = CJK if lang_idx == 0 else SERIF
     for s in SHOTS:
         svg = screenshot(**s)
-        base = os.path.join(OUT, f"appstore{suffix}_{s['idx']}")
+        base = os.path.join(OUT, f"appstore{lang_suffix}{size_suffix}_{s['idx']}")
         with open(base + ".svg", "w", encoding="utf-8") as f:
             f.write(svg)
         cairosvg.svg2png(bytestring=svg.encode("utf-8"), write_to=base + ".png",
@@ -432,9 +433,14 @@ def generate(lang_idx, suffix):
         print("wrote", base + ".png")
 
 
+# App Store device sizes: 6.7"/6.9" (primary, required) and 6.5" (optional).
+SIZES = [("", 1290, 2796), ("_65", 1242, 2688)]
+
+
 def main():
-    generate(0, "")      # zh -> appstore_1..5
-    generate(1, "_en")   # en -> appstore_en_1..5
+    for size_suffix, w, h in SIZES:
+        generate(0, "", w, h, size_suffix)       # zh
+        generate(1, "_en", w, h, size_suffix)    # en
 
 
 if __name__ == "__main__":

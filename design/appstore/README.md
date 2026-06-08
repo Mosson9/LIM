@@ -15,23 +15,28 @@ cairosvg; CJK via WenQuanYi, Latin headlines in serif).
 `contact_sheet.png` / `contact_sheet_en.png` are combined previews. App Store
 Connect lets you upload a localized screenshot set per language.
 
-## Specs
+## The full package (20 images)
 
-- **Size:** 1290 × 2796 px (portrait) — the iPhone 6.7"/6.9" display size, which
-  App Store Connect accepts as the primary required set (it also covers 6.5").
-- **Format:** opaque RGB PNG. App Store screenshots must not be transparent.
-- Up to 10 screenshots per device size; these 5 are ordered for the carousel.
+Both device sizes × both languages × 5 shots — the complete set you can upload
+to App Store Connect:
+
+| Size | zh-Hans | en |
+|------|---------|----|
+| **6.7"/6.9"** · 1290×2796 (primary, required) | `appstore_1..5.png` | `appstore_en_1..5.png` |
+| **6.5"** · 1242×2688 (optional) | `appstore_65_1..5.png` | `appstore_en_65_1..5.png` |
+
+- **Format:** opaque RGB PNG (App Store screenshots must not be transparent).
+- Up to 10 screenshots per device size per language; these 5 are carousel-ordered.
 
 ## Regenerate / customize
 
 ```bash
 pip install cairosvg pillow
-python3 generate.py            # writes appstore_1..5 .svg and .png
+python3 generate.py            # writes all 20 PNGs (+ source SVGs)
 ```
 
-To also produce the 6.5" set (1242 × 2688), change `W, H` at the top of
-`generate.py` and re-run. Headlines, copy, colors and the recreated screens are
-all defined inline and easy to edit. Colors are the app's design tokens
+Sizes are listed in `SIZES`, copy in the bilingual `TR` table, and each screen is
+recreated inline — all easy to edit. Colors are the app's design tokens
 (paper `#F4F3EE`, ink `#1B1B19`, indigo `#34357C`, sage `#5E7E63`, clay `#C0824F`,
 gold `#E9C36B`).
 
